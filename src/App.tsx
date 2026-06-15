@@ -5,6 +5,7 @@ import { exportControlePdf, exportRapportMensuelPdf } from './lib/pdf';
 import { exportControlesExcel, downloadTemplateSites, parseImportFile, type ImportPreview } from './lib/excel';
 import { topCriteresEnEchec, rankingAgents, sitesEnDeclin, heatmapData, tauxMoyenPeriode } from './lib/analytics';
 import { SignaturePad } from './components/SignaturePad';
+import { WelcomeModal, OnboardingChecklist } from './components/Onboarding';
 import { PACKS } from './lib/criteresPacks';
 import {
   Home, Building2, ClipboardList, Camera, CheckCircle,
@@ -181,6 +182,72 @@ interface AppData {
 
 const EMPTY_DATA: AppData = { sites: [], locaux: [], criteres: [], agents: [], controles: [], resultats: [], actions: [], templates: [] };
 
+const isDemoMode = () => localStorage.getItem('demo-mode') === '1';
+
+function generateDemoData(): AppData {
+  const sites = MOCK_SITES.map(s => ({ ...s, emailClient: 'client@exemple.fr' }));
+  const locaux = MOCK_LOCAUX;
+  const criteres = MOCK_CRITERES;
+  const agents = MOCK_AGENTS.map(a => ({ ...a, email: `${a.prenom.toLowerCase()}.${a.nom.toLowerCase()}@exemple.fr` }));
+
+  const controles: any[] = [];
+  const resultats: any[] = [];
+  const actions: any[] = [];
+
+  for (let i = 0; i < 12; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i * 12);
+    const site = sites[i % sites.length];
+    const cId = 'demo-c-' + i;
+    const baseTaux = 75 + ((i * 17) % 25);
+    controles.push({
+      id: cId, siteId: site.id, date: d.toISOString().split('T')[0],
+      type: ['Programmé', 'Programmé', 'Inopiné', 'Contradictoire client'][i % 4],
+      statut: i === 0 ? 'Brouillon' : i === 1 ? 'À valider' : 'Validé',
+      controleurId: '', agentEvalueId: agents[i % agents.length].id,
+      tauxConformite: baseTaux, commentaireGeneral: '', createdAt: d.toISOString(),
+    } as any);
+    const siteLocaux = locaux.filter(l => l.siteId === site.id);
+    for (const local of siteLocaux.slice(0, 3)) {
+      const applicables = criteres.filter(c => c.typeLocal.includes(local.type)).slice(0, 4);
+      for (const cr of applicables) {
+        const r = (i * 13 + cr.id.length + local.id.length) % 10;
+        const note = r < 6 ? 'Conforme' : r < 8 ? 'Partiellement conforme' : r < 9 ? 'Non conforme' : 'Non applicable';
+        resultats.push({
+          id: 'demo-r-' + resultats.length, controleId: cId, critereId: cr.id, localId: local.id,
+          note, photo: null, commentaire: '',
+        } as any);
+        if (note === 'Non conforme') {
+          actions.push({
+            id: 'demo-a-' + actions.length, controleId: cId,
+            descriptionNc: 'Non-conformité: ' + cr.libelle,
+            action: 'Repasser et nettoyer',
+            responsableId: agents[0].id,
+            echeance: new Date(d.getTime() + 7 * 86400000).toISOString().split('T')[0],
+            statut: (i + r) % 3 === 0 ? 'Soldée' : (i + r) % 3 === 1 ? 'En cours' : 'Ouverte',
+            createdAt: d.toISOString(),
+          } as any);
+        }
+      }
+    }
+  }
+
+  // Quelques contrôles planifiés futurs
+  for (let i = 1; i <= 4; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() + i * 7);
+    const site = sites[i % sites.length];
+    controles.push({
+      id: 'demo-p-' + i, siteId: site.id, date: d.toISOString().split('T')[0],
+      datePrevue: d.toISOString().split('T')[0],
+      type: 'Programmé', statut: 'Planifié',
+      controleurId: '', agentEvalueId: '', tauxConformite: null, commentaireGeneral: '', createdAt: new Date().toISOString(),
+    } as any);
+  }
+
+  return { sites, locaux, criteres, agents, controles, resultats, actions, templates: [] };
+}
+
 const AppContext = React.createContext<{
   data: AppData;
   setData: React.Dispatch<React.SetStateAction<AppData>>;
@@ -208,11 +275,12 @@ async function seedMocksForUser() {
 }
 
 function AppProvider({ children }: { children: React.ReactNode }) {
-  const [data, setData] = useState<AppData>(EMPTY_DATA);
-  const [session, setSession] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [role, setRole] = useState<string | null>(null);
-  const [orgId, setOrgId] = useState<string | null>(null);
+  const demo = isDemoMode();
+  const [data, setData] = useState<AppData>(() => demo ? generateDemoData() : EMPTY_DATA);
+  const [session, setSession] = useState<any>(demo ? { user: { id: 'demo', email: 'demo@local' } } : null);
+  const [loading, setLoading] = useState(!demo);
+  const [role, setRole] = useState<string | null>(demo ? 'admin' : null);
+  const [orgId, setOrgId] = useState<string | null>(demo ? 'demo' : null);
   const [currentUser, setCurrentUser] = useState<Agent | null>(() => {
     const saved = localStorage.getItem('controle-qualite-user');
     if (saved) try { return JSON.parse(saved); } catch {}
@@ -259,6 +327,7 @@ function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (demo) return; // pas de Supabase en mode démo
     let loadedFor: string | null = null;
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -297,40 +366,48 @@ function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    if (demo) {
+      localStorage.removeItem('demo-mode');
+      window.location.href = '/';
+      return;
+    }
     await supabase.auth.signOut();
   };
 
   const saveRow = useCallback(async (table: any, row: any) => {
-    await upsertRow(table, row);
+    if (!demo) await upsertRow(table, row);
     setData(prev => {
       const arr = (prev as any)[table] as any[];
       const i = arr.findIndex(r => r.id === row.id);
       const next = i >= 0 ? arr.map(r => r.id === row.id ? row : r) : [...arr, row];
       return { ...prev, [table]: next };
     });
-  }, []);
+  }, [demo]);
 
   const removeRow = useCallback(async (table: any, id: string) => {
-    await deleteRow(table, id);
+    if (!demo) await deleteRow(table, id);
     setData(prev => ({ ...prev, [table]: (prev as any)[table].filter((r: any) => r.id !== id) }));
-  }, []);
+  }, [demo]);
 
   const addControle = useCallback(async (controle: any, resultats: any[], actions: any[]) => {
-    await upsertRow('controles', controle);
-    if (resultats.length) await upsertMany('resultats', resultats);
-    if (actions.length) await upsertMany('actions', actions);
+    if (!demo) {
+      await upsertRow('controles', controle);
+      if (resultats.length) await upsertMany('resultats', resultats);
+      if (actions.length) await upsertMany('actions', actions);
+    }
     setData(prev => ({
       ...prev,
       controles: [...prev.controles, controle],
       resultats: [...prev.resultats, ...resultats],
       actions: [...prev.actions, ...actions],
     }));
-  }, []);
+  }, [demo]);
 
   const ownsSite = useCallback((siteId: string) => {
+    if (demo) return data.sites.some((x: any) => x.id === siteId);
     const s = data.sites.find((x: any) => x.id === siteId);
     return !!s && !!orgId && (s as any).orgId === orgId;
-  }, [data.sites, orgId]);
+  }, [data.sites, orgId, demo]);
   const isClientMode = !!session && !role && data.sites.length > 0;
   const isAdminOrManager = role === 'admin' || role === 'manager';
 
@@ -687,8 +764,9 @@ function ConformiteGauge({
 
 // --- Dashboard ---
 function DashboardPage() {
-  const { data, currentUser, isClientMode } = useApp();
+  const { data, currentUser, isClientMode, isAdminOrManager, session } = useApp();
   const navigate = useNavigate();
+  const uid = session?.user?.id || '';
   const totalControles = data.controles.length;
   const now = new Date();
   const controlesDuMois = data.controles.filter(c => {
@@ -729,6 +807,8 @@ function DashboardPage() {
         </div>
         {!isClientMode && <Button onClick={() => navigate('/controles/nouveau')}>Nouveau contrôle</Button>}
       </div>
+
+      {isDemoMode() && <OnboardingChecklist userId={uid} data={data} isAdminOrManager={isAdminOrManager} />}
 
       {actionsEnRetard > 0 && (
         <div
@@ -871,9 +951,16 @@ function LoginPage() {
 
   const handleLogin = async (e: any) => {
     e.preventDefault(); reset(); setBusy(true);
+    localStorage.removeItem('demo-mode');
     const { error } = await signIn(email, password);
     setBusy(false);
     if (error) setError(error);
+  };
+
+  const handleDemo = () => {
+    localStorage.setItem('demo-mode', '1');
+    Object.keys(localStorage).forEach(k => { if (k.startsWith('welcome-seen-') || k.startsWith('onboarding-dismissed-')) localStorage.removeItem(k); });
+    window.location.href = '/';
   };
 
   const handleSignup = async (e: any) => {
@@ -936,6 +1023,12 @@ function LoginPage() {
             <div className="flex justify-between text-sm pt-2">
               <button type="button" onClick={() => { reset(); setMode('signup'); }} className="text-blue-600 hover:underline">Créer un compte</button>
               <button type="button" onClick={() => { reset(); setMode('forgot'); }} className="text-blue-600 hover:underline">Mot de passe oublié ?</button>
+            </div>
+            <div className="pt-3 border-t border-gray-200">
+              <button type="button" onClick={handleDemo} disabled={busy} className="w-full text-sm bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
+                🚀 Voir la démo sans inscription
+              </button>
+              <p className="text-xs text-gray-400 text-center mt-2">Explorez l'app avec des données fictives</p>
             </div>
           </form>
         )}
@@ -3294,6 +3387,7 @@ function useOnlineStatus() {
 
 function Layout({ children }: any) {
   const { session, signOut, isClientMode, role } = useApp();
+  const uid = session?.user?.id || '';
   const [menuOpen, setMenuOpen] = useState(false);
   const online = useOnlineStatus();
 
@@ -3326,6 +3420,11 @@ function Layout({ children }: any) {
       {!online && (
         <div className="bg-orange-500 text-white text-center text-sm py-1.5 sticky top-0 z-50">
           ⚠ Hors-ligne — vos modifications seront sauvegardées localement et perdues si vous fermez l'onglet
+        </div>
+      )}
+      {isDemoMode() && (
+        <div className="bg-purple-600 text-white text-center text-sm py-1.5 sticky top-0 z-50">
+          🚀 Mode démo — vos modifications ne seront pas enregistrées. <button onClick={() => signOut()} className="underline font-medium ml-2">Créer un vrai compte →</button>
         </div>
       )}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
@@ -3369,6 +3468,8 @@ function Layout({ children }: any) {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6">{children}</main>
+
+      {isDemoMode() && <WelcomeModal userId={uid} role={role} />}
 
       <footer className="bg-white border-t border-gray-200 py-2 text-center text-xs text-gray-500">
         © 2026 Contrôle Qualité Propreté
