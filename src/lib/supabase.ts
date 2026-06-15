@@ -26,7 +26,7 @@ export function toDb(obj: any): any {
   return out;
 }
 
-const TABLES = ['sites', 'locaux', 'criteres', 'agents', 'controles', 'resultats', 'actions', 'site_viewers', 'templates'] as const;
+const TABLES = ['sites', 'locaux', 'criteres', 'agents', 'controles', 'resultats', 'actions', 'site_viewers', 'templates', 'commentaires_types'] as const;
 export type TableName = typeof TABLES[number];
 
 export async function fetchAll() {

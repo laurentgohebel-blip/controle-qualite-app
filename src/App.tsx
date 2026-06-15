@@ -7,6 +7,7 @@ import { topCriteresEnEchec, rankingAgents, sitesEnDeclin, heatmapData, tauxMoye
 import { SignaturePad } from './components/SignaturePad';
 import { WelcomeModal, OnboardingChecklist } from './components/Onboarding';
 import { LandingPage } from './components/LandingPage';
+import { VoiceButton } from './components/VoiceInput';
 import { PACKS } from './lib/criteresPacks';
 import {
   Home, Building2, ClipboardList, Camera, CheckCircle,
@@ -170,6 +171,13 @@ interface Template {
   seuilCible?: number;
 }
 
+interface CommentaireType {
+  id: string;
+  libelle: string;
+  note?: string | null;
+  categorie?: string | null;
+}
+
 interface AppData {
   sites: Site[];
   locaux: Local[];
@@ -179,9 +187,10 @@ interface AppData {
   resultats: Resultat[];
   actions: ActionCorrective[];
   templates: Template[];
+  commentairesTypes: CommentaireType[];
 }
 
-const EMPTY_DATA: AppData = { sites: [], locaux: [], criteres: [], agents: [], controles: [], resultats: [], actions: [], templates: [] };
+const EMPTY_DATA: AppData = { sites: [], locaux: [], criteres: [], agents: [], controles: [], resultats: [], actions: [], templates: [], commentairesTypes: [] };
 
 const isDemoMode = () => localStorage.getItem('demo-mode') === '1';
 
@@ -246,7 +255,17 @@ function generateDemoData(): AppData {
     } as any);
   }
 
-  return { sites, locaux, criteres, agents, controles, resultats, actions, templates: [] };
+  const commentairesTypes = [
+    { id: 'demo-ct-1', libelle: 'Trace de pas humide visible', note: 'Non conforme', categorie: 'Sols' },
+    { id: 'demo-ct-2', libelle: 'Poubelle non vidée', note: 'Non conforme', categorie: 'Déchets' },
+    { id: 'demo-ct-3', libelle: 'Désinfection effectuée correctement', note: 'Conforme', categorie: 'Sanitaires' },
+    { id: 'demo-ct-4', libelle: 'Quelques traces de doigts sur la porte vitrée', note: 'Partiellement conforme', categorie: 'Vitrerie' },
+    { id: 'demo-ct-5', libelle: 'Hautes surfaces légèrement empoussiérées', note: 'Partiellement conforme', categorie: 'Poussières' },
+    { id: 'demo-ct-6', libelle: 'Absence d\'odeurs', note: 'Conforme' },
+    { id: 'demo-ct-7', libelle: 'Critère non observable lors du contrôle', note: 'Non applicable' },
+  ] as any[];
+
+  return { sites, locaux, criteres, agents, controles, resultats, actions, templates: [], commentairesTypes };
 }
 
 const AppContext = React.createContext<{
@@ -314,11 +333,14 @@ function AppProvider({ children }: { children: React.ReactNode }) {
         setOrgId(m?.org_id || null);
       }
 
-      let all = await fetchAll();
+      let all: any = await fetchAll();
       if (all.sites.length === 0 && all.criteres.length === 0 && myMembership) {
         await seedMocksForUser();
         all = await fetchAll();
       }
+      // Renomme la table snake_case en clé camelCase attendue par AppData
+      all.commentairesTypes = all.commentaires_types || [];
+      delete all.commentaires_types;
       setData(all as AppData);
     } catch (e) {
       console.error('loadData', e);
@@ -375,19 +397,23 @@ function AppProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   };
 
+  const stateKey = (table: string) => table === 'commentaires_types' ? 'commentairesTypes' : table;
+
   const saveRow = useCallback(async (table: any, row: any) => {
     if (!demo) await upsertRow(table, row);
+    const key = stateKey(table);
     setData(prev => {
-      const arr = (prev as any)[table] as any[];
+      const arr = (prev as any)[key] as any[];
       const i = arr.findIndex(r => r.id === row.id);
       const next = i >= 0 ? arr.map(r => r.id === row.id ? row : r) : [...arr, row];
-      return { ...prev, [table]: next };
+      return { ...prev, [key]: next };
     });
   }, [demo]);
 
   const removeRow = useCallback(async (table: any, id: string) => {
     if (!demo) await deleteRow(table, id);
-    setData(prev => ({ ...prev, [table]: (prev as any)[table].filter((r: any) => r.id !== id) }));
+    const key = stateKey(table);
+    setData(prev => ({ ...prev, [key]: (prev as any)[key].filter((r: any) => r.id !== id) }));
   }, [demo]);
 
   const addControle = useCallback(async (controle: any, resultats: any[], actions: any[]) => {
@@ -1407,6 +1433,20 @@ function NouveauControlePage() {
                         placeholder="Ajouter un commentaire..."
                         rows={2}
                       />
+                      <div className="flex flex-wrap gap-1 mt-2 items-center">
+                        {data.commentairesTypes
+                          .filter((t: any) => !t.note || t.note === (resultat?.note || 'Conforme'))
+                          .slice(0, 6)
+                          .map((t: any) => (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onClick={() => handleSetCommentaire(critere.id, ((resultat?.commentaire || '') + ' ' + t.libelle).trim())}
+                              className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-full hover:bg-blue-100"
+                            >+ {t.libelle}</button>
+                          ))}
+                        <VoiceButton onResult={(text) => handleSetCommentaire(critere.id, ((resultat?.commentaire || '') + ' ' + text).trim())} />
+                      </div>
                     </div>
 
                     <div className="mt-3 flex items-center gap-3">
@@ -2644,6 +2684,99 @@ function CriteresPage() {
   );
 }
 
+// --- Commentaires types ---
+function CommentairesTypesPage() {
+  const { data, saveRow, removeRow, isAdminOrManager } = useApp();
+  const [form, setForm] = useState<any>({ libelle: '', note: '', categorie: '' });
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  if (!isAdminOrManager) return <Card className="text-center py-8"><p>Accès réservé.</p></Card>;
+
+  const reset = () => { setForm({ libelle: '', note: '', categorie: '' }); setEditingId(null); };
+
+  const save = async () => {
+    if (!form.libelle.trim()) { alert('Libellé requis'); return; }
+    await saveRow('commentaires_types', {
+      id: editingId || generateId(),
+      libelle: form.libelle.trim(),
+      note: form.note || null,
+      categorie: form.categorie || null,
+    });
+    reset();
+  };
+
+  const edit = (c: any) => { setForm({ libelle: c.libelle, note: c.note || '', categorie: c.categorie || '' }); setEditingId(c.id); };
+
+  const byNote = (n: string) => data.commentairesTypes.filter((c: any) => (n === '' ? !c.note : c.note === n));
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold">Commentaires types</h1>
+      <p className="text-sm text-gray-500">
+        Modèles de commentaires réutilisables lors de la saisie d'un contrôle. Vos contrôleurs cliqueront dessus au lieu de tout retaper.
+      </p>
+
+      <Card>
+        <h2 className="text-lg font-semibold mb-4">{editingId ? 'Modifier' : 'Nouveau modèle'}</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+          <Input label="Libellé" value={form.libelle} onChange={(e: any) => setForm({ ...form, libelle: e.target.value })} placeholder="ex: Trace de pas humide" required />
+          <Select
+            label="Apparaît pour la note"
+            value={form.note}
+            onChange={(e: any) => setForm({ ...form, note: e.target.value })}
+            options={[
+              { value: '', label: 'Toutes les notes' },
+              { value: 'Conforme', label: 'Conforme' },
+              { value: 'Partiellement conforme', label: 'Partiellement conforme' },
+              { value: 'Non conforme', label: 'Non conforme' },
+              { value: 'Non applicable', label: 'Non applicable' },
+            ]}
+          />
+          <Input label="Catégorie (optionnel)" value={form.categorie} onChange={(e: any) => setForm({ ...form, categorie: e.target.value })} placeholder="ex: Sols, Sanitaires" />
+          <div className="flex gap-2">
+            {editingId && <Button variant="secondary" onClick={reset}>Annuler</Button>}
+            <Button onClick={save} className="flex-1">{editingId ? 'Mettre à jour' : '+ Ajouter'}</Button>
+          </div>
+        </div>
+      </Card>
+
+      <div className="space-y-4">
+        {['Conforme', 'Partiellement conforme', 'Non conforme', 'Non applicable', ''].map((n) => {
+          const items = byNote(n);
+          if (items.length === 0) return null;
+          return (
+            <Card key={n || 'all'}>
+              <h3 className="font-semibold mb-3">
+                {n || 'Universels (toutes notes)'}
+                <span className="text-sm text-gray-500 ml-2">({items.length})</span>
+              </h3>
+              <div className="space-y-2">
+                {items.map((c: any) => (
+                  <div key={c.id} className="p-2 bg-gray-50 rounded border border-gray-200 flex justify-between items-center">
+                    <div>
+                      <p className="text-sm">{c.libelle}</p>
+                      {c.categorie && <p className="text-xs text-gray-500">{c.categorie}</p>}
+                    </div>
+                    <div className="flex gap-2 text-sm">
+                      <button onClick={() => edit(c)} className="text-blue-600 hover:underline">Modifier</button>
+                      <button onClick={() => confirm('Supprimer ?') && removeRow('commentaires_types', c.id)} className="text-red-600 hover:underline">Suppr.</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          );
+        })}
+        {data.commentairesTypes.length === 0 && (
+          <Card className="text-center py-8">
+            <p className="text-gray-500">Aucun modèle. Créez-en pour faire gagner du temps à vos contrôleurs.</p>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // --- Templates ---
 const TYPES_LOCAUX = ['Bureau', 'Sanitaire', 'Circulation', 'Vestiaire', 'Cuisine/Office'];
 
@@ -3421,6 +3554,7 @@ function Layout({ children }: any) {
         { to: '/actions', label: 'Actions' },
         ...(isAdmin || isManager ? [{ to: '/criteres', label: 'Critères' }] : []),
         ...(isAdmin || isManager ? [{ to: '/templates', label: 'Templates' }] : []),
+        ...(isAdmin || isManager ? [{ to: '/commentaires-types', label: 'Modèles commentaires' }] : []),
         { to: '/analytique', label: 'Analytique' },
         ...(isAdmin ? [{ to: '/organisation', label: 'Organisation' }] : []),
       ];
@@ -3520,6 +3654,7 @@ function AppRoutes() {
         <Route path="/sites/:id" element={<RequireAuth><SiteDetailPage /></RequireAuth>} />
         <Route path="/criteres" element={<RequireAuth><CriteresPage /></RequireAuth>} />
         <Route path="/templates" element={<RequireAuth><TemplatesPage /></RequireAuth>} />
+        <Route path="/commentaires-types" element={<RequireAuth><CommentairesTypesPage /></RequireAuth>} />
         <Route path="/planning" element={<RequireAuth><PlanningPage /></RequireAuth>} />
         <Route path="/analytique" element={<RequireAuth><AnalytiquePage /></RequireAuth>} />
         <Route path="/organisation" element={<RequireAuth><OrganisationPage /></RequireAuth>} />
