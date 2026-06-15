@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Building2, CheckCircle, ClipboardList, ChevronLeft } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { CheckCircle, ClipboardList, ChevronLeft, BarChart3, FileCheck, Camera } from 'lucide-react';
 
 const DISMISS_KEY = (uid: string) => `onboarding-dismissed-${uid}`;
 const WELCOME_KEY = (uid: string) => `welcome-seen-${uid}`;
 
-// ============== Modal de bienvenue (3 slides) ==============
-export function WelcomeModal({ userId, role }: { userId: string; role: string | null }) {
+// ============== Modal de bienvenue (5 slides) ==============
+export function WelcomeModal({ userId, role: _role }: { userId: string; role: string | null }) {
   const [step, setStep] = useState(0);
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!userId || localStorage.getItem(WELCOME_KEY(userId))) return;
@@ -22,36 +23,113 @@ export function WelcomeModal({ userId, role }: { userId: string; role: string | 
     setOpen(false);
   };
 
+  const goTo = (path: string) => {
+    close();
+    navigate(path);
+  };
+
   const slides = [
     {
-      icon: <Building2 className="w-16 h-16 text-blue-600 mx-auto mb-4" />,
-      title: 'Bienvenue 👋',
+      icon: '👋',
+      title: 'Bienvenue dans la démo',
       body: (
         <>
-          <p className="mb-3">Cette application va t'aider à <strong>contrôler la qualité de tes prestations de propreté</strong> sur le terrain et en bureau.</p>
-          <p>En 5 minutes tu seras opérationnel : on te guide.</p>
+          <p className="mb-3 text-gray-700">Vous explorez une version d'essai avec des <strong>données fictives</strong> (3 sites, 12 contrôles, agents, actions correctives).</p>
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm text-purple-900">
+            ✨ <strong>Aucune inscription requise.</strong> Vos modifications ne sont pas enregistrées et seront réinitialisées au prochain accès.
+          </div>
         </>
       ),
     },
     {
-      icon: <ClipboardList className="w-16 h-16 text-blue-600 mx-auto mb-4" />,
-      title: 'Comment ça marche ?',
+      icon: <ClipboardList className="w-16 h-16 text-blue-600 mx-auto" />,
+      title: 'Faites un contrôle en 3 étapes',
       body: (
-        <ul className="space-y-2 text-left">
-          <li><strong>1.</strong> Tu crées tes <strong>sites clients</strong> avec leurs locaux et agents</li>
-          <li><strong>2.</strong> Tu importes les <strong>critères de contrôle</strong> (pack standard fourni)</li>
-          <li><strong>3.</strong> Sur le terrain, tu fais des <strong>contrôles</strong> avec notes, photos, signatures</li>
-          <li><strong>4.</strong> L'app calcule le <strong>taux de conformité</strong> et génère le rapport PDF pour le client</li>
-        </ul>
+        <>
+          <p className="mb-3 text-gray-700">Le cœur de l'app : une saisie pensée pour le terrain.</p>
+          <ul className="space-y-1.5 text-left text-sm">
+            <li>📋 Sélection des locaux à contrôler</li>
+            <li>✅ Notation par critères pondérés (Conforme / Partiel / Non conforme)</li>
+            <li>📷 Photos terrain + 🎤 dictée vocale du commentaire</li>
+            <li>✍️ Signatures électroniques contrôleur + agent</li>
+            <li>📊 Calcul automatique du taux de conformité</li>
+          </ul>
+          <button onClick={() => goTo('/controles/nouveau')} className="mt-4 text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+            🚀 Essayer maintenant →
+          </button>
+        </>
       ),
     },
     {
-      icon: <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />,
-      title: 'C\'est parti !',
+      icon: <BarChart3 className="w-16 h-16 text-blue-600 mx-auto" />,
+      title: 'Pilotez votre activité',
       body: (
         <>
-          <p className="mb-3">Une <strong>checklist de démarrage</strong> t'attend sur le tableau de bord. Suis-la étape par étape.</p>
-          <p className="text-sm text-gray-500">Tu peux aussi explorer l'app librement — la checklist se cochera automatiquement.</p>
+          <p className="mb-3 text-gray-700">Des indicateurs au service de votre management.</p>
+          <ul className="space-y-1.5 text-left text-sm">
+            <li>🗺️ Heatmap tous sites × mois</li>
+            <li>🎯 Top critères en échec pour décider des formations</li>
+            <li>🏅 Ranking des agents sur 3, 6 ou 12 mois</li>
+            <li>⚠️ Détection automatique des sites en déclin</li>
+            <li>📅 Planning récurrent (« tous les lundis pendant 3 mois »)</li>
+          </ul>
+          <button onClick={() => goTo('/analytique')} className="mt-4 text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+            📊 Voir l'analytique →
+          </button>
+        </>
+      ),
+    },
+    {
+      icon: <FileCheck className="w-16 h-16 text-blue-600 mx-auto" />,
+      title: 'Transmettez à vos clients',
+      body: (
+        <>
+          <p className="mb-3 text-gray-700">Plusieurs façons de partager le résultat avec votre donneur d'ordre.</p>
+          <ul className="space-y-1.5 text-left text-sm">
+            <li>📄 PDF professionnel avec KPI + photos + signatures</li>
+            <li>🔗 Lien web sécurisé (valable 90 jours, sans inscription)</li>
+            <li>👤 Compte permanent en lecture seule sur ses sites</li>
+            <li>📧 Email automatique pré-rempli au validateur</li>
+          </ul>
+          <button onClick={() => goTo('/controles')} className="mt-4 text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+            📂 Voir les contrôles →
+          </button>
+        </>
+      ),
+    },
+    {
+      icon: <Camera className="w-16 h-16 text-purple-600 mx-auto" />,
+      title: 'Et bien plus encore',
+      body: (
+        <>
+          <p className="mb-3 text-gray-700">Quelques fonctionnalités qui font la différence :</p>
+          <ul className="space-y-1.5 text-left text-sm">
+            <li>🏢 Multi-utilisateurs avec rôles (admin / manager / contrôleur)</li>
+            <li>✅ Workflow d'approbation manager</li>
+            <li>📥 Import Excel des sites en masse</li>
+            <li>🚀 Templates de sites pré-configurés</li>
+            <li>📱 PWA installable sur téléphone, mode hors-ligne</li>
+            <li>🔄 Planification récurrente automatique</li>
+            <li>📚 Pack de critères CCN Propreté inclus</li>
+          </ul>
+        </>
+      ),
+    },
+    {
+      icon: <CheckCircle className="w-16 h-16 text-green-600 mx-auto" />,
+      title: 'Convaincu ? Créez votre compte',
+      body: (
+        <>
+          <p className="mb-3 text-gray-700">L'essai et la version Découverte sont <strong>gratuits à vie</strong>. Aucune carte bancaire requise.</p>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-900 mb-4">
+            ✓ Vos propres sites & contrôleurs<br />
+            ✓ Vos propres clients en accès lecture<br />
+            ✓ Vos données persistées en sécurité
+          </div>
+          <button onClick={() => { close(); localStorage.removeItem('demo-mode'); window.location.href = '/login'; }} className="text-sm bg-gradient-to-r from-blue-600 to-purple-600 text-white px-5 py-2.5 rounded-lg hover:opacity-90 font-medium">
+            Créer mon compte gratuit →
+          </button>
+          <p className="text-xs text-gray-500 mt-3">Vous pouvez aussi continuer à explorer la démo librement.</p>
         </>
       ),
     },
@@ -62,14 +140,14 @@ export function WelcomeModal({ userId, role }: { userId: string; role: string | 
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8 text-center">
-        {slide.icon}
+      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-8 text-center max-h-[90vh] overflow-y-auto">
+        {typeof slide.icon === 'string' ? <div className="text-6xl mb-3">{slide.icon}</div> : <div className="mb-3">{slide.icon}</div>}
         <h2 className="text-2xl font-bold mb-3">{slide.title}</h2>
         <div className="text-gray-700 mb-6">{slide.body}</div>
 
         <div className="flex justify-center gap-1 mb-4">
           {slides.map((_, i) => (
-            <div key={i} className={`h-2 w-8 rounded-full ${i === step ? 'bg-blue-600' : i < step ? 'bg-blue-300' : 'bg-gray-200'}`} />
+            <div key={i} className={`h-2 rounded-full transition-all ${i === step ? 'w-8 bg-blue-600' : i < step ? 'w-2 bg-blue-300' : 'w-2 bg-gray-200'}`} />
           ))}
         </div>
 
@@ -78,18 +156,16 @@ export function WelcomeModal({ userId, role }: { userId: string; role: string | 
             onClick={step === 0 ? close : () => setStep(step - 1)}
             className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm"
           >
-            {step === 0 ? 'Passer' : '← Retour'}
+            {step === 0 ? 'Fermer' : '← Retour'}
           </button>
+          <div className="text-xs text-gray-400 self-center">{step + 1} / {slides.length}</div>
           <button
             onClick={isLast ? close : () => setStep(step + 1)}
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
-            {isLast ? 'Démarrer ✓' : 'Suivant →'}
+            {isLast ? 'Continuer la démo' : 'Suivant →'}
           </button>
         </div>
-        {role && role !== 'admin' && step === 0 && (
-          <p className="text-xs text-gray-400 mt-3">Connecté en tant que <strong>{role}</strong></p>
-        )}
       </div>
     </div>
   );
