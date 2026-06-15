@@ -31,24 +31,30 @@ export function VoiceButton({ onResult, lang = 'fr-FR' }: { onResult: (text: str
     r.interimResults = true;
     r.maxAlternatives = 1;
 
-    let finalTranscript = '';
+    let transcript = '';
     r.onresult = (e: any) => {
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const res = e.results[i];
-        if (res.isFinal) finalTranscript += res[0].transcript + ' ';
+      transcript = '';
+      for (let i = 0; i < e.results.length; i++) {
+        transcript += e.results[i][0].transcript;
       }
+      console.log('[voice] résultat partiel:', transcript);
     };
     r.onend = () => {
+      console.log('[voice] onend, transcript final:', transcript);
       setListening(false);
-      const txt = finalTranscript.trim();
+      const txt = transcript.trim();
       if (txt) onResult(txt);
+      else alert('Aucun son détecté. Essayez de parler plus fort, plus longtemps, et cliquez Stop seulement quand vous avez fini.');
     };
     r.onerror = (e: any) => {
+      console.warn('[voice] erreur:', e.error);
       setListening(false);
       if (e.error === 'not-allowed') alert('Autorisez l\'accès au micro dans votre navigateur (icône cadenas à gauche de l\'URL).');
-      else if (e.error === 'no-speech') { /* silencieux */ }
-      else console.warn('SpeechRecognition error:', e.error);
+      else if (e.error === 'no-speech') alert('Aucun son détecté.');
+      else if (e.error === 'audio-capture') alert('Micro indisponible (autre app l\'utilise ?).');
+      else alert('Erreur dictée : ' + e.error);
     };
+    r.onstart = () => console.log('[voice] start');
     recognitionRef.current = r;
     r.start();
     setListening(true);
