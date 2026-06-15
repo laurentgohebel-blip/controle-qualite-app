@@ -6,6 +6,7 @@ import { exportControlesExcel, downloadTemplateSites, parseImportFile, type Impo
 import { topCriteresEnEchec, rankingAgents, sitesEnDeclin, heatmapData, tauxMoyenPeriode } from './lib/analytics';
 import { SignaturePad } from './components/SignaturePad';
 import { WelcomeModal, OnboardingChecklist } from './components/Onboarding';
+import { LandingPage } from './components/LandingPage';
 import { PACKS } from './lib/criteresPacks';
 import {
   Home, Building2, ClipboardList, Camera, CheckCircle,
@@ -3482,7 +3483,7 @@ function Layout({ children }: any) {
 function RequireAuth({ children }: any) {
   const { session, loading } = useApp();
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Chargement...</div>;
-  if (!session) return <LoginPage />;
+  if (!session) return <LandingPage />;
   return children;
 }
 
