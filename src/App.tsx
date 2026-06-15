@@ -3539,7 +3539,7 @@ function Layout({ children }: any) {
   const isAdmin = role === 'admin';
   const isManager = role === 'manager';
 
-  const links = isClientMode
+  const mainLinks = isClientMode
     ? [
         { to: '/', label: 'Tableau de bord' },
         { to: '/sites', label: 'Mes sites' },
@@ -3552,12 +3552,15 @@ function Layout({ children }: any) {
         { to: '/sites', label: 'Sites' },
         { to: '/controles', label: 'Contrôles' },
         { to: '/actions', label: 'Actions' },
-        ...(isAdmin || isManager ? [{ to: '/criteres', label: 'Critères' }] : []),
-        ...(isAdmin || isManager ? [{ to: '/templates', label: 'Templates' }] : []),
-        ...(isAdmin || isManager ? [{ to: '/commentaires-types', label: 'Modèles commentaires' }] : []),
         { to: '/analytique', label: 'Analytique' },
-        ...(isAdmin ? [{ to: '/organisation', label: 'Organisation' }] : []),
       ];
+
+  const configLinks = isClientMode ? [] : [
+    ...(isAdmin || isManager ? [{ to: '/criteres', label: 'Critères' }] : []),
+    ...(isAdmin || isManager ? [{ to: '/templates', label: 'Templates de site' }] : []),
+    ...(isAdmin || isManager ? [{ to: '/commentaires-types', label: 'Modèles de commentaires' }] : []),
+    ...(isAdmin ? [{ to: '/organisation', label: 'Organisation & membres' }] : []),
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -3577,10 +3580,22 @@ function Layout({ children }: any) {
             <Building2 className="w-6 h-6 text-blue-600" />
             <span className="font-semibold text-gray-900">Contrôle Qualité</span>
           </div>
-          <nav className="hidden md:flex gap-2">
-            {links.map(l => (
+          <nav className="hidden md:flex gap-2 items-center">
+            {mainLinks.map(l => (
               <Link key={l.to} to={l.to} className="px-3 py-2 text-sm hover:bg-gray-100 rounded">{l.label}</Link>
             ))}
+            {configLinks.length > 0 && (
+              <div className="relative group">
+                <button className="px-3 py-2 text-sm hover:bg-gray-100 rounded flex items-center gap-1">
+                  Paramétrage <span className="text-xs">▾</span>
+                </button>
+                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[220px] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition z-50">
+                  {configLinks.map(l => (
+                    <Link key={l.to} to={l.to} className="block px-4 py-2 text-sm hover:bg-gray-100 whitespace-nowrap">{l.label}</Link>
+                  ))}
+                </div>
+              </div>
+            )}
           </nav>
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-700 hidden lg:inline">{session.user?.email}</span>
@@ -3603,9 +3618,17 @@ function Layout({ children }: any) {
         {menuOpen && (
           <div className="md:hidden border-t border-gray-200 bg-white">
             <nav className="flex flex-col p-2">
-              {links.map(l => (
+              {mainLinks.map(l => (
                 <Link key={l.to} to={l.to} onClick={() => setMenuOpen(false)} className="px-3 py-2 hover:bg-gray-100 rounded">{l.label}</Link>
               ))}
+              {configLinks.length > 0 && (
+                <>
+                  <div className="px-3 py-2 mt-2 text-xs font-semibold text-gray-500 uppercase border-t border-gray-100">Paramétrage</div>
+                  {configLinks.map(l => (
+                    <Link key={l.to} to={l.to} onClick={() => setMenuOpen(false)} className="px-3 py-2 hover:bg-gray-100 rounded text-sm">{l.label}</Link>
+                  ))}
+                </>
+              )}
             </nav>
           </div>
         )}
