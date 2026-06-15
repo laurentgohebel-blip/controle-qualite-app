@@ -1091,35 +1091,43 @@ function LoginPage() {
 
 // --- Nouveau Contrôle ---
 function NouveauControlePage() {
-  const { data, addControle, removeRow, currentUser } = useApp();
+  const { data, addControle, saveRow, removeRow, currentUser } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const params = new URLSearchParams(location.search);
   const siteIdParam = params.get('siteId') || '';
   const planifieId = params.get('planifieId') || '';
+  const brouillonId = params.get('brouillonId') || '';
   const planifie = planifieId ? data.controles.find((c: any) => c.id === planifieId) : null;
+  const brouillon = brouillonId ? data.controles.find((c: any) => c.id === brouillonId) : null;
+  const brouillonResultats = brouillon ? data.resultats.filter((r: any) => r.controleId === brouillon.id) : [];
 
-  const [step, setStep] = useState(1);
-  const [controle, setControle] = useState<any>({
-    id: generateId(),
-    siteId: planifie?.siteId || siteIdParam,
-    date: new Date().toISOString().split('T')[0],
-    type: planifie?.type || 'Programmé',
-    statut: 'Brouillon',
-    controleurId: currentUser?.id || '',
-    agentEvalueId: '',
-    tauxConformite: null,
-    commentaireGeneral: '',
-    createdAt: new Date().toISOString()
-  });
+  const [step, setStep] = useState(brouillon ? 2 : 1);
+  const [controle, setControle] = useState<any>(() => brouillon
+    ? { ...brouillon }
+    : {
+        id: generateId(),
+        siteId: planifie?.siteId || siteIdParam,
+        date: new Date().toISOString().split('T')[0],
+        type: planifie?.type || 'Programmé',
+        statut: 'Brouillon',
+        controleurId: currentUser?.id || '',
+        agentEvalueId: '',
+        tauxConformite: null,
+        commentaireGeneral: '',
+        createdAt: new Date().toISOString()
+      });
   const DRAFT_KEY = 'controle-draft-' + (controle.siteId || 'new');
   const [selectedLocaux, setSelectedLocaux] = useState<string[]>(() => {
+    if (brouillon) return [...new Set(brouillonResultats.map((r: any) => r.localId))] as string[];
     try { const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); return d?.selectedLocaux || []; } catch { return []; }
   });
   const [resultats, setResultats] = useState<any[]>(() => {
+    if (brouillon) return brouillonResultats;
     try { const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); return d?.resultats || []; } catch { return []; }
   });
   const [currentLocalIndex, setCurrentLocalIndex] = useState(0);
+  const [savingDraft, setSavingDraft] = useState(false);
 
   // Auto-save brouillon (mode hors-ligne friendly)
   useEffect(() => {
@@ -1130,8 +1138,9 @@ function NouveauControlePage() {
 
   // Pré-remplit locaux + agent depuis le dernier contrôle du site
   useEffect(() => {
-    if (!controle.siteId) return;
+    if (!controle.siteId || brouillon) return;
     const last = data.controles
+      .filter((c: any) => c.id !== controle.id && c.statut !== 'Brouillon' && c.statut !== 'Planifié')
       .filter((c: any) => c.siteId === controle.siteId)
       .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
     if (!last) return;
@@ -1171,6 +1180,7 @@ function NouveauControlePage() {
         return nr;
       }
       return [...prev, {
+        id: generateId(),
         controleId: controle.id,
         critereId,
         localId: currentLocal?.id || '',
@@ -1190,6 +1200,7 @@ function NouveauControlePage() {
         return nr;
       }
       return [...prev, {
+        id: generateId(),
         controleId: controle.id,
         critereId,
         localId: currentLocal?.id || '',
@@ -1228,7 +1239,7 @@ function NouveauControlePage() {
     }
     else if (step === 3) {
       const nc = { ...controle, tauxConformite: tauxCalcule, statut: 'Terminé' };
-      const newResultats = resultats.map(r => ({ ...r, id: generateId() }));
+      const finalResultats = resultats.map(r => ({ ...r, id: r.id || generateId() }));
       const newActions = resultats
         .filter(r => r.note === 'Non conforme')
         .map(r => ({
@@ -1243,7 +1254,13 @@ function NouveauControlePage() {
 
       (async () => {
         try {
-          await addControle(nc, newResultats, newActions);
+          if (brouillon) {
+            await saveRow('controles', nc);
+            for (const r of finalResultats) await saveRow('resultats', r);
+            for (const a of newActions) await saveRow('actions', a);
+          } else {
+            await addControle(nc, finalResultats, newActions);
+          }
           if (planifieId) await removeRow('controles', planifieId);
           localStorage.removeItem(DRAFT_KEY);
           navigate(`/controles/${nc.id}`);
@@ -1251,6 +1268,23 @@ function NouveauControlePage() {
           alert('Erreur sauvegarde: ' + (e.message || e));
         }
       })();
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (!controle.siteId) { alert('Choisissez un site avant de sauvegarder.'); return; }
+    setSavingDraft(true);
+    try {
+      const draft = { ...controle, statut: 'Brouillon', tauxConformite: tauxCalcule || null };
+      const finalResultats = resultats.map(r => ({ ...r, id: r.id || generateId() }));
+      await saveRow('controles', draft);
+      for (const r of finalResultats) await saveRow('resultats', r);
+      localStorage.removeItem(DRAFT_KEY);
+      navigate('/controles');
+    } catch (e: any) {
+      alert('Erreur : ' + (e?.message || e));
+    } finally {
+      setSavingDraft(false);
     }
   };
 
@@ -1270,14 +1304,21 @@ function NouveauControlePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <button onClick={handlePrev} className="p-2 hover:bg-gray-100 rounded-lg">
-          {step > 1 ? <ChevronLeft /> : <Home />}
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold">Nouveau contrôle</h1>
-          <p className="text-gray-500">Étape {step} sur 3</p>
+      <div className="flex items-center gap-4 justify-between flex-wrap">
+        <div className="flex items-center gap-4">
+          <button onClick={handlePrev} className="p-2 hover:bg-gray-100 rounded-lg">
+            {step > 1 ? <ChevronLeft /> : <Home />}
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold">{brouillon ? 'Reprendre le brouillon' : 'Nouveau contrôle'}</h1>
+            <p className="text-gray-500">Étape {step} sur 3</p>
+          </div>
         </div>
+        {step >= 2 && (
+          <Button variant="secondary" onClick={handleSaveDraft} disabled={savingDraft}>
+            {savingDraft ? '...' : '💾 Sauvegarder comme brouillon'}
+          </Button>
+        )}
       </div>
 
       <div className="flex gap-2 mb-6">
@@ -1470,7 +1511,7 @@ function NouveauControlePage() {
                                   nr[i] = { ...nr[i], photo: url };
                                   return nr;
                                 }
-                                return [...prev, { controleId: controle.id, critereId: critere.id, localId: currentLocal.id, note: 'Conforme', photo: url, commentaire: '' }];
+                                return [...prev, { id: generateId(), controleId: controle.id, critereId: critere.id, localId: currentLocal.id, note: 'Conforme', photo: url, commentaire: '' }];
                               });
                             } catch (err: any) {
                               alert('Erreur upload: ' + (err.message || err));
@@ -1654,10 +1695,15 @@ function ControlesPage() {
                       )}
                     </div>
                   </div>
-                  <div className="mt-3">
+                  <div className="mt-3 flex gap-3">
                     <Link to={`/controles/${c.id}`} className="text-sm text-blue-600 hover:underline">
                       Voir les détails →
                     </Link>
+                    {c.statut === 'Brouillon' && (
+                      <Link to={`/controles/nouveau?brouillonId=${c.id}`} className="text-sm text-orange-600 hover:underline font-medium">
+                        ▶ Reprendre la saisie
+                      </Link>
+                    )}
                   </div>
                 </Card>
               );
@@ -1729,6 +1775,11 @@ function ControleDetailPage() {
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
+          {controle.statut === 'Brouillon' && (
+            <Button onClick={() => navigate(`/controles/nouveau?brouillonId=${controle.id}`)}>
+              ▶ Reprendre la saisie
+            </Button>
+          )}
           {role === 'controleur' && controle.statut === 'Terminé' && (
             <Button onClick={submitForApproval}>Soumettre pour validation</Button>
           )}
