@@ -8,6 +8,7 @@ import { SignaturePad } from './components/SignaturePad';
 import { WelcomeModal, OnboardingChecklist } from './components/Onboarding';
 import { LandingPage } from './components/LandingPage';
 import { VoiceButton } from './components/VoiceInput';
+import { NotificationsBanner, sendNotif } from './components/Notifications';
 import { PACKS } from './lib/criteresPacks';
 import {
   Home, Building2, ClipboardList, Camera, CheckCircle,
@@ -428,6 +429,14 @@ function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
     }
+    // Notification navigateur si actions générées
+    if (actions.length > 0) {
+      sendNotif(
+        `Contrôle terminé`,
+        `${actions.length} action${actions.length > 1 ? 's' : ''} corrective${actions.length > 1 ? 's' : ''} générée${actions.length > 1 ? 's' : ''}.`,
+        { tag: 'controle-termine', url: `/controles/${controle.id}` }
+      );
+    }
     setData(prev => ({
       ...prev,
       controles: [...prev.controles, controle],
@@ -841,6 +850,7 @@ function DashboardPage() {
         {!isClientMode && <Button onClick={() => navigate('/controles/nouveau')}>Nouveau contrôle</Button>}
       </div>
 
+      <NotificationsBanner data={data} />
       {isDemoMode() && <OnboardingChecklist userId={uid} data={data} isAdminOrManager={isAdminOrManager} />}
 
       {actionsEnRetard > 0 && (
