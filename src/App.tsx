@@ -395,6 +395,12 @@ function AppProvider({ children }: { children: React.ReactNode }) {
       await upsertRow('controles', controle);
       if (resultats.length) await upsertMany('resultats', resultats);
       if (actions.length) await upsertMany('actions', actions);
+      // Notif email pour chaque action ayant un responsable
+      for (const a of actions) {
+        if (a.responsableId) {
+          supabase.functions.invoke('notify', { body: { event: 'action-creee', actionId: a.id } }).catch(() => {});
+        }
+      }
     }
     setData(prev => ({
       ...prev,
@@ -1640,6 +1646,9 @@ function ControleDetailPage() {
   const submitForApproval = async () => {
     if (!controle) return;
     await saveRow('controles', { ...controle, statut: 'À valider' });
+    if (!isDemoMode()) {
+      supabase.functions.invoke('notify', { body: { event: 'controle-soumis', controleId: controle.id } }).catch(() => {});
+    }
   };
   const approve = async () => {
     if (!controle) return;
