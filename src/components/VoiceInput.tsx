@@ -27,16 +27,27 @@ export function VoiceButton({ onResult, lang = 'fr-FR' }: { onResult: (text: str
     const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
     const r = new Rec();
     r.lang = lang;
-    r.interimResults = false;
+    r.continuous = true;
+    r.interimResults = true;
     r.maxAlternatives = 1;
+
+    let finalTranscript = '';
     r.onresult = (e: any) => {
-      const text = Array.from(e.results).map((res: any) => res[0].transcript).join(' ');
-      if (text) onResult(text);
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const res = e.results[i];
+        if (res.isFinal) finalTranscript += res[0].transcript + ' ';
+      }
     };
-    r.onend = () => setListening(false);
+    r.onend = () => {
+      setListening(false);
+      const txt = finalTranscript.trim();
+      if (txt) onResult(txt);
+    };
     r.onerror = (e: any) => {
       setListening(false);
-      if (e.error === 'not-allowed') alert('Autorisez l\'accès au micro dans votre navigateur.');
+      if (e.error === 'not-allowed') alert('Autorisez l\'accès au micro dans votre navigateur (icône cadenas à gauche de l\'URL).');
+      else if (e.error === 'no-speech') { /* silencieux */ }
+      else console.warn('SpeechRecognition error:', e.error);
     };
     recognitionRef.current = r;
     r.start();
