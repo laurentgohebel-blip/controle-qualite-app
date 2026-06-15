@@ -1762,6 +1762,10 @@ function ControleDetailPage() {
             📧 Envoyer
           </Button>
           <Button variant="outline" onClick={async () => {
+            if (isDemoMode()) {
+              alert('🚀 Mode démo — Le lien client public n\'est pas disponible.\n\nCréez un compte gratuit pour générer des liens partageables à vos clients (valides 90 jours, sans inscription pour eux).');
+              return;
+            }
             try {
               const { data: link, error } = await supabase
                 .from('public_share_links')
@@ -2323,7 +2327,7 @@ function SiteDetailPage() {
   const [viewers, setViewers] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!site || !canEdit) return;
+    if (!site || !canEdit || isDemoMode()) return;
     supabase.from('site_viewers').select('*').eq('site_id', site.id).then(({ data }) => {
       if (data) setViewers(data);
     });
@@ -2331,13 +2335,18 @@ function SiteDetailPage() {
 
   const addViewer = async () => {
     if (!newViewer.includes('@')) { alert('Email invalide'); return; }
+    if (isDemoMode()) {
+      setViewers([...viewers, { site_id: site!.id, email: newViewer.trim().toLowerCase() }]);
+      setNewViewer('');
+      return;
+    }
     const { error } = await supabase.from('site_viewers').insert({ site_id: site!.id, email: newViewer.trim().toLowerCase() });
     if (error) { alert(error.message); return; }
     setViewers([...viewers, { site_id: site!.id, email: newViewer.trim().toLowerCase() }]);
     setNewViewer('');
   };
   const removeViewer = async (email: string) => {
-    await supabase.from('site_viewers').delete().eq('site_id', site!.id).eq('email', email);
+    if (!isDemoMode()) await supabase.from('site_viewers').delete().eq('site_id', site!.id).eq('email', email);
     setViewers(viewers.filter(v => v.email !== email));
   };
 
@@ -2912,6 +2921,20 @@ function OrganisationPage() {
 
   const reload = async () => {
     if (!orgId) return;
+    if (isDemoMode()) {
+      setOrg({ id: 'demo', name: 'Démo Propreté SARL' });
+      setOrgName('Démo Propreté SARL');
+      setMembers([
+        { user_id: 'demo-admin', role: 'admin', email: 'demo@local' },
+        { user_id: 'demo-manager', role: 'manager', email: 'manager@demo.fr' },
+        { user_id: 'demo-controleur-1', role: 'controleur', email: 'jean.dupont@demo.fr' },
+        { user_id: 'demo-controleur-2', role: 'controleur', email: 'marie.martin@demo.fr' },
+      ]);
+      setInvitations([
+        { email: 'pierre.bernard@demo.fr', role: 'controleur' },
+      ]);
+      return;
+    }
     const [oRes, mRes, iRes] = await Promise.all([
       supabase.from('organizations').select('*').eq('id', orgId).maybeSingle(),
       supabase.from('org_members').select('*'),
@@ -2930,6 +2953,11 @@ function OrganisationPage() {
 
   const invite = async () => {
     if (!emailToInvite.includes('@')) { alert('Email invalide'); return; }
+    if (isDemoMode()) {
+      setInvitations([...invitations, { email: emailToInvite.trim().toLowerCase(), role: roleToInvite }]);
+      setEmailToInvite('');
+      return;
+    }
     const { error } = await supabase.from('org_invitations').insert({
       org_id: orgId, email: emailToInvite.trim().toLowerCase(), role: roleToInvite,
     });
@@ -2940,19 +2968,23 @@ function OrganisationPage() {
 
   const removeMember = async (uid: string) => {
     if (!confirm('Retirer ce membre ?')) return;
+    if (isDemoMode()) { setMembers(members.filter(m => m.user_id !== uid)); return; }
     await supabase.from('org_members').delete().eq('user_id', uid).eq('org_id', orgId);
     reload();
   };
   const changeRole = async (uid: string, newRole: string) => {
+    if (isDemoMode()) { setMembers(members.map(m => m.user_id === uid ? { ...m, role: newRole } : m)); return; }
     await supabase.from('org_members').update({ role: newRole }).eq('user_id', uid).eq('org_id', orgId);
     reload();
   };
   const renameOrg = async () => {
     if (!orgName.trim()) return;
+    if (isDemoMode()) { setOrg({ ...org, name: orgName }); return; }
     await supabase.from('organizations').update({ name: orgName }).eq('id', orgId);
     reload();
   };
   const cancelInvite = async (email: string) => {
+    if (isDemoMode()) { setInvitations(invitations.filter(i => i.email !== email)); return; }
     await supabase.from('org_invitations').delete().eq('org_id', orgId).eq('email', email);
     reload();
   };
