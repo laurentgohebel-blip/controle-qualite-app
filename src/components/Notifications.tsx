@@ -12,6 +12,11 @@ export function useNotifPermission(): [NotifPermission, () => Promise<NotifPermi
     if (typeof Notification === 'undefined') return 'denied';
     const result = await Notification.requestPermission();
     setPerm(result);
+    if (result === 'granted') {
+      try {
+        new Notification('Contrôle Qualité', { body: 'Notifications activées ✓ Vous recevrez désormais les alertes importantes.', icon: '/pwa-192.svg' });
+      } catch {}
+    }
     return result;
   };
 
@@ -46,27 +51,48 @@ export function NotificationsBanner({ data }: { data: any }) {
   // À l'arrivée sur le dashboard, si permission accordée, envoyer un récap
   useEffect(() => {
     if (perm !== 'granted' || shownSummary) return;
-    const today = new Date().toISOString().split('T')[0];
-    const planifiesAujourdhui = data.controles.filter((c: any) => c.statut === 'Planifié' && c.datePrevue === today).length;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const in7days = new Date(); in7days.setDate(in7days.getDate() + 7);
+    const upcoming = data.controles.filter((c: any) => {
+      if (c.statut !== 'Planifié' || !c.datePrevue) return false;
+      const d = new Date(c.datePrevue);
+      return d >= today && d <= in7days;
+    }).length;
     const actionsRetard = data.actions.filter((a: any) => new Date(a.echeance) < new Date() && a.statut !== 'Soldée').length;
 
     const parts: string[] = [];
-    if (planifiesAujourdhui) parts.push(`${planifiesAujourdhui} contrôle${planifiesAujourdhui > 1 ? 's' : ''} prévu${planifiesAujourdhui > 1 ? 's' : ''} aujourd'hui`);
+    if (upcoming) parts.push(`${upcoming} contrôle${upcoming > 1 ? 's' : ''} à venir (7j)`);
     if (actionsRetard) parts.push(`${actionsRetard} action${actionsRetard > 1 ? 's' : ''} en retard`);
 
-    if (parts.length) {
-      sendNotif('Contrôle Qualité', parts.join(' · '), { tag: 'daily-summary' });
-    }
+    if (parts.length) sendNotif('Récap Contrôle Qualité', parts.join(' · '), { tag: 'daily-summary' });
     setShownSummary(true);
   }, [perm, data, shownSummary]);
-
-  if (typeof Notification === 'undefined') return null;
-  if (perm === 'granted' || dismissed) return null;
 
   const dismiss = () => {
     localStorage.setItem('notif-banner-dismissed', '1');
     setDismissed(true);
   };
+
+  if (typeof Notification === 'undefined') return null;
+
+  if (perm === 'granted') {
+    if (dismissed) return null;
+    return (
+      <div className="bg-green-50 border-l-4 border-green-500 rounded-lg p-3 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 text-sm text-green-900">
+          ✓ Notifications activées
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => sendNotif('Test', 'Si vous voyez ce message, tout fonctionne ✓')} className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700">
+            Tester
+          </button>
+          <button onClick={dismiss} className="px-3 py-1 text-sm text-green-700 hover:underline">OK</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (dismissed) return null;
 
   return (
     <div className="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4 flex items-center justify-between gap-3 flex-wrap">
