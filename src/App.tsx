@@ -21,7 +21,7 @@ import {
 // ========== TYPES ==========
 type NoteType = 'Conforme' | 'Partiellement conforme' | 'Non conforme' | 'Non applicable';
 type TypeControle = 'Programmé' | 'Inopiné' | 'Contradictoire client';
-type StatutControle = 'Planifié' | 'Brouillon' | 'Terminé' | 'À valider' | 'Validé';
+type StatutControle = 'Planifié' | 'Brouillon' | 'Terminé' | 'Validé';
 type StatutAction = 'Ouverte' | 'En cours' | 'Soldée';
 type TypeLocal = 'Bureau' | 'Sanitaire' | 'Circulation' | 'Vestiaire' | 'Cuisine/Office' | 'Vitrerie' | 'Extérieur';
 type Categorie = 'Sols' | 'Sanitaires' | 'Surfaces' | 'Poussières' | 'Déchets' | 'Vitrerie' | 'Approvisionnement consommables';
@@ -213,7 +213,7 @@ function generateDemoData(): AppData {
     controles.push({
       id: cId, siteId: site.id, date: d.toISOString().split('T')[0],
       type: ['Programmé', 'Programmé', 'Inopiné', 'Contradictoire client'][i % 4],
-      statut: i === 0 ? 'Brouillon' : i === 1 ? 'À valider' : 'Validé',
+      statut: i === 0 ? 'Brouillon' : i === 1 ? 'Terminé' : 'Validé',
       controleurId: '', agentEvalueId: agents[i % agents.length].id,
       tauxConformite: baseTaux, commentaireGeneral: '', createdAt: d.toISOString(),
     } as any);
@@ -1721,31 +1721,13 @@ function ControlesPage() {
 
 // --- Détail Contrôle ---
 function ControleDetailPage() {
-  const { data, saveRow, isAdminOrManager, role, orgId } = useApp();
+  const { data, saveRow, orgId } = useApp();
   const { id } = useParams();
   const navigate = useNavigate();
   const controle = getControleById(data.controles, id || '');
   const [sigControleur, setSigControleur] = useState<string | null>(controle?.signatureControleur || null);
   const [sigAgent, setSigAgent] = useState<string | null>(controle?.signatureAgent || null);
   const [busy, setBusy] = useState(false);
-
-  const submitForApproval = async () => {
-    if (!controle) return;
-    await saveRow('controles', { ...controle, statut: 'À valider' });
-    if (!isDemoMode()) {
-      supabase.functions.invoke('notify', { body: { event: 'controle-soumis', controleId: controle.id } }).catch(() => {});
-    }
-  };
-  const approve = async () => {
-    if (!controle) return;
-    await saveRow('controles', { ...controle, statut: 'Validé' });
-  };
-  const reject = async () => {
-    if (!controle) return;
-    const motif = prompt('Motif du rejet ?');
-    if (motif === null) return;
-    await saveRow('controles', { ...controle, statut: 'Brouillon', commentaireGeneral: (controle.commentaireGeneral || '') + '\n[Rejeté par manager] ' + motif });
-  };
 
   if (!controle) {
     return (
@@ -1779,15 +1761,6 @@ function ControleDetailPage() {
             <Button onClick={() => navigate(`/controles/nouveau?brouillonId=${controle.id}`)}>
               ▶ Reprendre la saisie
             </Button>
-          )}
-          {role === 'controleur' && controle.statut === 'Terminé' && (
-            <Button onClick={submitForApproval}>Soumettre pour validation</Button>
-          )}
-          {isAdminOrManager && controle.statut === 'À valider' && (
-            <>
-              <Button onClick={approve}>✓ Valider</Button>
-              <Button variant="outline" onClick={reject} className="text-red-600 border-red-300">✗ Rejeter</Button>
-            </>
           )}
           <Button variant="secondary" onClick={async () => {
             try {
