@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { supabase, fetchAll, upsertRow, upsertMany, deleteRow, uploadPhoto } from './lib/supabase';
 import { exportControlePdf, exportRapportMensuelPdf } from './lib/pdf';
@@ -3588,6 +3588,48 @@ function fromSnake(row: any): any {
 }
 
 // ========== LAYOUT ==========
+function ParamMenu({ links }: { links: { to: string; label: string }[] }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className={`px-3 py-2 text-sm rounded flex items-center gap-1 ${open ? 'bg-gray-100' : 'hover:bg-gray-100'}`}
+      >
+        Paramétrage <span className={`text-xs transition-transform ${open ? 'rotate-180' : ''}`}>▾</span>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[220px] z-50">
+          {links.map(l => (
+            <Link
+              key={l.to}
+              to={l.to}
+              onClick={() => setOpen(false)}
+              className="block px-4 py-2 text-sm hover:bg-gray-100 whitespace-nowrap"
+            >{l.label}</Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function useOnlineStatus() {
   const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   useEffect(() => {
@@ -3656,18 +3698,7 @@ function Layout({ children }: any) {
             {mainLinks.map(l => (
               <Link key={l.to} to={l.to} className="px-3 py-2 text-sm hover:bg-gray-100 rounded">{l.label}</Link>
             ))}
-            {configLinks.length > 0 && (
-              <div className="relative group">
-                <button className="px-3 py-2 text-sm hover:bg-gray-100 rounded flex items-center gap-1">
-                  Paramétrage <span className="text-xs">▾</span>
-                </button>
-                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[220px] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition z-50">
-                  {configLinks.map(l => (
-                    <Link key={l.to} to={l.to} className="block px-4 py-2 text-sm hover:bg-gray-100 whitespace-nowrap">{l.label}</Link>
-                  ))}
-                </div>
-              </div>
-            )}
+            {configLinks.length > 0 && <ParamMenu links={configLinks} />}
           </nav>
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-700 hidden lg:inline">{session.user?.email}</span>
