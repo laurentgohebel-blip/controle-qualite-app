@@ -1,8 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { supabase, fetchAll, upsertRow, upsertMany, deleteRow, uploadPhoto } from './lib/supabase';
-import { exportControlePdf, exportRapportMensuelPdf } from './lib/pdf';
-import { exportControlesExcel, downloadTemplateSites, parseImportFile, type ImportPreview } from './lib/excel';
+import type { ImportPreview } from './lib/excel';
+// Wrappers lazy : ne charge jspdf/xlsx que lors d'un export, pas au démarrage de l'app
+const exportControlePdf = async (opts: any) => (await import('./lib/pdf')).exportControlePdf(opts);
+const exportRapportMensuelPdf = async (opts: any) => (await import('./lib/pdf')).exportRapportMensuelPdf(opts);
+const exportControlesExcel = async (opts: any) => (await import('./lib/excel')).exportControlesExcel(opts);
+const downloadTemplateSites = async () => (await import('./lib/excel')).downloadTemplateSites();
+const parseImportFile = async (file: File, existing: any[]) => (await import('./lib/excel')).parseImportFile(file, existing);
 import { topCriteresEnEchec, rankingAgents, sitesEnDeclin, heatmapData, tauxMoyenPeriode } from './lib/analytics';
 import { SignaturePad } from './components/SignaturePad';
 import { WelcomeModal, OnboardingChecklist } from './components/Onboarding';
@@ -749,12 +754,12 @@ function NoteButton({
     <button
       onClick={() => !disabled && onSelect(note)}
       disabled={disabled}
-      className={`px-3 py-1.5 text-white text-xs font-medium rounded-lg ${
+      className={`px-4 py-2.5 sm:px-3 sm:py-1.5 text-white text-sm sm:text-xs font-medium rounded-lg min-h-[44px] sm:min-h-0 ${
         NOTE_COLORS[note]
       } ${
         selected ? 'ring-2 ring-white ring-offset-2' : ''
       } ${
-        disabled ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'
+        disabled ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90 active:scale-95'
       }`}
     >
       {note}
@@ -1499,7 +1504,7 @@ function NouveauControlePage() {
                               key={t.id}
                               type="button"
                               onClick={() => handleSetCommentaire(critere.id, ((resultat?.commentaire || '') + ' ' + t.libelle).trim())}
-                              className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-full hover:bg-blue-100"
+                              className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-3 py-2 rounded-full hover:bg-blue-100 active:scale-95"
                             >+ {t.libelle}</button>
                           ))}
                         <VoiceButton onResult={(text) => handleSetCommentaire(critere.id, ((resultat?.commentaire || '') + ' ' + text).trim())} />
@@ -1507,7 +1512,7 @@ function NouveauControlePage() {
                     </div>
 
                     <div className="mt-3 flex items-center gap-3">
-                      <label className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 text-sm">
+                      <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 active:scale-95 text-sm min-h-[44px]">
                         <Camera className="w-4 h-4" />
                         Photo
                         <input
@@ -2451,7 +2456,7 @@ function SiteDetailPage() {
             {viewers.map(v => (
               <div key={v.email} className="p-2 bg-gray-50 rounded border border-gray-200 flex justify-between items-center">
                 <span className="text-sm">{v.email}</span>
-                <button onClick={() => removeViewer(v.email)} className="text-red-600 text-sm hover:underline">Retirer</button>
+                <button onClick={() => removeViewer(v.email)} className="text-red-600 text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-red-50">Retirer</button>
               </div>
             ))}
             {viewers.length === 0 && <p className="text-sm text-gray-400">Aucun accès partagé</p>}
@@ -2495,7 +2500,7 @@ function SiteDetailPage() {
                 <p className="font-medium">{local.nom}</p>
                 <p className="text-sm text-gray-500">{local.type} - {local.surface}m² - {local.etage}</p>
               </div>
-              {canEdit && <button onClick={() => removeRow('locaux', local.id)} className="text-red-600 text-sm hover:underline">Suppr.</button>}
+              {canEdit && <button onClick={() => removeRow('locaux', local.id)} className="text-red-600 text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-red-50">Suppr.</button>}
             </div>
           ))}
         </div>
@@ -2533,7 +2538,7 @@ function SiteDetailPage() {
                   <p className="font-medium">{a.prenom} {a.nom}</p>
                   {a.email && <p className="text-xs text-gray-500">{a.email}</p>}
                 </div>
-                <button onClick={() => removeRow('agents', a.id)} className="text-red-600 text-sm hover:underline">Suppr.</button>
+                <button onClick={() => removeRow('agents', a.id)} className="text-red-600 text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-red-50">Suppr.</button>
               </div>
             ))}
           </div>
@@ -2722,8 +2727,8 @@ function CriteresPage() {
                 <p className="text-xs text-gray-500">{c.categorie} · coef {c.coefficient} · {(c.typeLocal || []).join(', ')}</p>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => handleEdit(c)} className="text-blue-600 text-sm hover:underline">Modifier</button>
-                <button onClick={() => removeRow('criteres', c.id)} className="text-red-600 text-sm hover:underline">Suppr.</button>
+                <button onClick={() => handleEdit(c)} className="text-blue-600 text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-blue-50">Modifier</button>
+                <button onClick={() => removeRow('criteres', c.id)} className="text-red-600 text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-red-50">Suppr.</button>
               </div>
             </div>
           ))}
@@ -2919,7 +2924,7 @@ function TemplatesPage() {
                   <Select label="Type" value={l.type} onChange={(e: any) => updateLocal(i, { type: e.target.value })} options={TYPES_LOCAUX.map(t => ({ value: t, label: t }))} />
                   <Input label="Surface" type="number" value={l.surface} onChange={(e: any) => updateLocal(i, { surface: parseInt(e.target.value) || 0 })} />
                   <Input label="Étage" value={l.etage} onChange={(e: any) => updateLocal(i, { etage: e.target.value })} />
-                  <button onClick={() => removeLocal(i)} className="text-red-600 text-sm hover:underline">Supprimer</button>
+                  <button onClick={() => removeLocal(i)} className="text-red-600 text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-red-50">Supprimer</button>
                 </div>
               ))}
             </div>
@@ -2933,7 +2938,7 @@ function TemplatesPage() {
                   <Input label="Prénom" value={a.prenom} onChange={(e: any) => updateAgent(i, { prenom: e.target.value })} />
                   <Input label="Nom" value={a.nom} onChange={(e: any) => updateAgent(i, { nom: e.target.value })} />
                   <Input label="Email" type="email" value={a.email || ''} onChange={(e: any) => updateAgent(i, { email: e.target.value })} />
-                  <button onClick={() => removeAgent(i)} className="text-red-600 text-sm hover:underline">Supprimer</button>
+                  <button onClick={() => removeAgent(i)} className="text-red-600 text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-red-50">Supprimer</button>
                 </div>
               ))}
             </div>
@@ -3056,7 +3061,7 @@ function OrganisationPage() {
                     <option value="controleur">Contrôleur</option>
                   </select>
                 ) : <Badge variant="info">{m.role}</Badge>}
-                {isAdmin && <button onClick={() => removeMember(m.user_id)} className="text-red-600 text-sm hover:underline">Retirer</button>}
+                {isAdmin && <button onClick={() => removeMember(m.user_id)} className="text-red-600 text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-red-50">Retirer</button>}
               </div>
             </div>
           ))}
@@ -3458,7 +3463,7 @@ function PlanningPage() {
                 </div>
                 <div className="flex gap-2">
                   <Button onClick={() => startControle(c)}>Démarrer</Button>
-                  <button onClick={() => confirm('Annuler ce contrôle planifié ?') && removeRow('controles', c.id)} className="text-red-600 text-sm hover:underline">Annuler</button>
+                  <button onClick={() => confirm('Annuler ce contrôle planifié ?') && removeRow('controles', c.id)} className="text-red-600 text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-red-50">Annuler</button>
                 </div>
               </div>
             );
