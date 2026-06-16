@@ -4,6 +4,7 @@ import {
   Shield, Zap, ChevronRight, Check, Calendar, Smartphone,
 } from 'lucide-react';
 import { Explainer } from './Explainer';
+import { DashboardPreview } from './DashboardPreview';
 
 export function LandingPage() {
   const navigate = useNavigate();
@@ -63,6 +64,11 @@ export function LandingPage() {
             </button>
           </div>
           <p className="text-xs text-gray-400 mt-4">Aucune carte bancaire requise · Données fictives en démo</p>
+
+          {/* Aperçu dashboard sous le hero */}
+          <div className="mt-16 max-w-5xl mx-auto px-4">
+            <DashboardPreview />
+          </div>
         </div>
       </section>
 
