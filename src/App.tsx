@@ -981,7 +981,8 @@ function DashboardPage() {
 
 // --- Login ---
 function LoginPage() {
-  const { signIn } = useApp();
+  const { signIn, session } = useApp();
+  const navigate = useNavigate();
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -989,6 +990,11 @@ function LoginPage() {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // Si déjà connecté, redirige vers le dashboard
+  useEffect(() => {
+    if (session) navigate('/');
+  }, [session, navigate]);
 
   const reset = () => { setError(''); setInfo(''); };
 
