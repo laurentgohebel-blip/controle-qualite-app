@@ -1,1 +1,57 @@
 @import "tailwindcss";
+
+/* Animations pour l'Explainer */
+@keyframes fade-in-up {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up { animation: fade-in-up 0.5s ease-out; }
+
+@keyframes fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+.animate-fade-in { animation: fade-in 0.4s ease-out; }
+
+@keyframes zoom-in {
+  0% { transform: scale(0.5); opacity: 0; }
+  60% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-zoom-in { animation: zoom-in 0.6s ease-out; }
+
+@keyframes slide-up {
+  0% { transform: translateY(40px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+.animate-slide-up { animation: slide-up 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+
+@keyframes signature-draw {
+  0% { stroke-dasharray: 0 500; }
+  100% { stroke-dasharray: 500 500; }
+}
+.signature-draw {
+  stroke-dasharray: 0 500;
+  animation: signature-draw 1.2s ease-out forwards;
+}
+.signature-draw-2 {
+  stroke-dasharray: 0 500;
+  animation: signature-draw 1.2s ease-out 0.8s forwards;
+}
+
+@keyframes typewriter {
+  0% { width: 0; }
+  100% { width: 100%; }
+}
+.typewriter {
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  animation: typewriter 1.5s steps(40) 0.5s both;
+}
+
+@keyframes pulse-soft {
+  0%, 100% { transform: scale(1); box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.3); }
+  50% { transform: scale(1.05); box-shadow: 0 15px 35px -5px rgba(37, 99, 235, 0.5); }
+}
+.animate-pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }

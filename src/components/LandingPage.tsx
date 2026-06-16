@@ -3,6 +3,7 @@ import {
   Building2, ClipboardList, Camera, Users, BarChart3, FileCheck,
   Shield, Zap, ChevronRight, Check, Calendar, Smartphone,
 } from 'lucide-react';
+import { Explainer } from './Explainer';
 
 export function LandingPage() {
   const navigate = useNavigate();
@@ -62,6 +63,17 @@ export function LandingPage() {
             </button>
           </div>
           <p className="text-xs text-gray-400 mt-4">Aucune carte bancaire requise · Données fictives en démo</p>
+        </div>
+      </section>
+
+      {/* Explainer animé */}
+      <section className="bg-white py-12 md:py-16">
+        <div className="max-w-5xl mx-auto px-4">
+          <div className="text-center mb-8">
+            <p className="text-sm font-semibold text-blue-600 mb-2">VISITE GUIDÉE</p>
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900">L'app en 25 secondes</h2>
+          </div>
+          <Explainer />
         </div>
       </section>
 
