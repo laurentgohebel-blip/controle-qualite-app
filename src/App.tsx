@@ -14,6 +14,7 @@ import { WelcomeModal, OnboardingChecklist } from './components/Onboarding';
 import { LandingPage } from './components/LandingPage';
 import { VoiceButton } from './components/VoiceInput';
 import { NotificationsBanner, sendNotif } from './components/Notifications';
+import { ErrorBoundary, GlobalErrorBoundary } from './components/ErrorBoundary';
 import { PACKS } from './lib/criteresPacks';
 import {
   Home, Building2, ClipboardList, Camera, CheckCircle,
@@ -3761,39 +3762,49 @@ function RequireAuth({ children }: any) {
   return children;
 }
 
+function Page({ scope, children }: { scope: string; children: React.ReactNode }) {
+  return (
+    <ErrorBoundary scope={scope}>
+      <RequireAuth>{children}</RequireAuth>
+    </ErrorBoundary>
+  );
+}
+
 function AppRoutes() {
   const location = useLocation();
   const isPublic = location.pathname.startsWith('/public/');
 
   if (isPublic) {
     return (
-      <Routes>
-        <Route path="/public/:token" element={<PublicReportPage />} />
-      </Routes>
+      <ErrorBoundary scope="public">
+        <Routes>
+          <Route path="/public/:token" element={<PublicReportPage />} />
+        </Routes>
+      </ErrorBoundary>
     );
   }
 
   return (
     <Layout>
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/" element={<RequireAuth><DashboardPage /></RequireAuth>} />
-        <Route path="/sites" element={<RequireAuth><SitesPage /></RequireAuth>} />
-        <Route path="/sites/nouveau" element={<RequireAuth><SiteFormPage /></RequireAuth>} />
-        <Route path="/sites/import" element={<RequireAuth><SitesImportPage /></RequireAuth>} />
-        <Route path="/sites/:id/edit" element={<RequireAuth><SiteFormPage /></RequireAuth>} />
-        <Route path="/sites/:id" element={<RequireAuth><SiteDetailPage /></RequireAuth>} />
-        <Route path="/criteres" element={<RequireAuth><CriteresPage /></RequireAuth>} />
-        <Route path="/templates" element={<RequireAuth><TemplatesPage /></RequireAuth>} />
-        <Route path="/commentaires-types" element={<RequireAuth><CommentairesTypesPage /></RequireAuth>} />
-        <Route path="/planning" element={<RequireAuth><PlanningPage /></RequireAuth>} />
-        <Route path="/analytique" element={<RequireAuth><AnalytiquePage /></RequireAuth>} />
-        <Route path="/organisation" element={<RequireAuth><OrganisationPage /></RequireAuth>} />
-        <Route path="/controles" element={<RequireAuth><ControlesPage /></RequireAuth>} />
-        <Route path="/controles/nouveau" element={<RequireAuth><NouveauControlePage /></RequireAuth>} />
-        <Route path="/controles/:id" element={<RequireAuth><ControleDetailPage /></RequireAuth>} />
-        <Route path="/actions" element={<RequireAuth><ActionsPage /></RequireAuth>} />
-        <Route path="*" element={<RequireAuth><DashboardPage /></RequireAuth>} />
+        <Route path="/login" element={<ErrorBoundary scope="login"><LoginPage /></ErrorBoundary>} />
+        <Route path="/" element={<Page scope="dashboard"><DashboardPage /></Page>} />
+        <Route path="/sites" element={<Page scope="sites"><SitesPage /></Page>} />
+        <Route path="/sites/nouveau" element={<Page scope="site-form"><SiteFormPage /></Page>} />
+        <Route path="/sites/import" element={<Page scope="sites-import"><SitesImportPage /></Page>} />
+        <Route path="/sites/:id/edit" element={<Page scope="site-form"><SiteFormPage /></Page>} />
+        <Route path="/sites/:id" element={<Page scope="site-detail"><SiteDetailPage /></Page>} />
+        <Route path="/criteres" element={<Page scope="criteres"><CriteresPage /></Page>} />
+        <Route path="/templates" element={<Page scope="templates"><TemplatesPage /></Page>} />
+        <Route path="/commentaires-types" element={<Page scope="commentaires-types"><CommentairesTypesPage /></Page>} />
+        <Route path="/planning" element={<Page scope="planning"><PlanningPage /></Page>} />
+        <Route path="/analytique" element={<Page scope="analytique"><AnalytiquePage /></Page>} />
+        <Route path="/organisation" element={<Page scope="organisation"><OrganisationPage /></Page>} />
+        <Route path="/controles" element={<Page scope="controles"><ControlesPage /></Page>} />
+        <Route path="/controles/nouveau" element={<Page scope="nouveau-controle"><NouveauControlePage /></Page>} />
+        <Route path="/controles/:id" element={<Page scope="controle-detail"><ControleDetailPage /></Page>} />
+        <Route path="/actions" element={<Page scope="actions"><ActionsPage /></Page>} />
+        <Route path="*" element={<Page scope="dashboard"><DashboardPage /></Page>} />
       </Routes>
     </Layout>
   );
@@ -3801,11 +3812,13 @@ function AppRoutes() {
 
 function App() {
   return (
-    <AppProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
-    </AppProvider>
+    <GlobalErrorBoundary>
+      <AppProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </AppProvider>
+    </GlobalErrorBoundary>
   );
 }
 
