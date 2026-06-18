@@ -406,16 +406,25 @@ function AppProvider({ children }: { children: React.ReactNode }) {
 
   const stateKey = (table: string) => table === 'commentaires_types' ? 'commentairesTypes' : table;
 
+  // Tables avec colonne org_id : on auto-remplit côté état React (le trigger SQL le fait en base).
+  const ORG_SCOPED = new Set(['sites', 'locaux', 'criteres', 'agents', 'controles', 'resultats', 'actions', 'templates', 'commentaires_types']);
+  const enrichOrg = (table: string, row: any) => {
+    if (orgId && ORG_SCOPED.has(table) && !row.orgId) return { ...row, orgId };
+    return row;
+  };
+
   const saveRow = useCallback(async (table: any, row: any) => {
-    if (!demo) await upsertRow(table, row);
+    const enriched = enrichOrg(table, row);
+    if (!demo) await upsertRow(table, enriched);
     const key = stateKey(table);
     setData(prev => {
       const arr = (prev as any)[key] as any[];
-      const i = arr.findIndex(r => r.id === row.id);
-      const next = i >= 0 ? arr.map(r => r.id === row.id ? row : r) : [...arr, row];
+      const i = arr.findIndex(r => r.id === enriched.id);
+      const next = i >= 0 ? arr.map(r => r.id === enriched.id ? enriched : r) : [...arr, enriched];
       return { ...prev, [key]: next };
     });
-  }, [demo]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demo, orgId]);
 
   const removeRow = useCallback(async (table: any, id: string) => {
     if (!demo) await deleteRow(table, id);
@@ -424,32 +433,36 @@ function AppProvider({ children }: { children: React.ReactNode }) {
   }, [demo]);
 
   const addControle = useCallback(async (controle: any, resultats: any[], actions: any[]) => {
+    const c = enrichOrg('controles', controle);
+    const rs = resultats.map(r => enrichOrg('resultats', r));
+    const acts = actions.map(a => enrichOrg('actions', a));
     if (!demo) {
-      await upsertRow('controles', controle);
-      if (resultats.length) await upsertMany('resultats', resultats);
-      if (actions.length) await upsertMany('actions', actions);
+      await upsertRow('controles', c);
+      if (rs.length) await upsertMany('resultats', rs);
+      if (acts.length) await upsertMany('actions', acts);
       // Notif email pour chaque action ayant un responsable
-      for (const a of actions) {
+      for (const a of acts) {
         if (a.responsableId) {
           supabase.functions.invoke('notify', { body: { event: 'action-creee', actionId: a.id } }).catch(() => {});
         }
       }
     }
     // Notification navigateur si actions générées
-    if (actions.length > 0) {
+    if (acts.length > 0) {
       sendNotif(
         `Contrôle terminé`,
-        `${actions.length} action${actions.length > 1 ? 's' : ''} corrective${actions.length > 1 ? 's' : ''} générée${actions.length > 1 ? 's' : ''}.`,
-        { tag: 'controle-termine', url: `/controles/${controle.id}` }
+        `${acts.length} action${acts.length > 1 ? 's' : ''} corrective${acts.length > 1 ? 's' : ''} générée${acts.length > 1 ? 's' : ''}.`,
+        { tag: 'controle-termine', url: `/controles/${c.id}` }
       );
     }
     setData(prev => ({
       ...prev,
-      controles: [...prev.controles, controle],
-      resultats: [...prev.resultats, ...resultats],
-      actions: [...prev.actions, ...actions],
+      controles: [...prev.controles, c],
+      resultats: [...prev.resultats, ...rs],
+      actions: [...prev.actions, ...acts],
     }));
-  }, [demo]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demo, orgId]);
 
   const ownsSite = useCallback((siteId: string) => {
     if (demo) return data.sites.some((x: any) => x.id === siteId);
