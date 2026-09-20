@@ -78,15 +78,15 @@ export function NotificationsBanner({ data }: { data: any }) {
   if (perm === 'granted') {
     if (dismissed) return null;
     return (
-      <div className="bg-green-50 border-l-4 border-green-500 rounded-lg p-3 flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2 text-sm text-green-900">
+      <div className="bg-note-conforme/10 border-l-4 border-note-conforme rounded-lg p-3 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 text-sm text-note-conforme">
           ✓ Notifications activées
         </div>
         <div className="flex gap-2">
-          <button onClick={() => sendNotif('Test', 'Si vous voyez ce message, tout fonctionne ✓')} className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700">
+          <button onClick={() => sendNotif('Test', 'Si vous voyez ce message, tout fonctionne ✓')} className="px-3 py-1 text-sm bg-note-conforme text-white rounded hover:bg-note-conforme">
             Tester
           </button>
-          <button onClick={dismiss} className="px-3 py-1 text-sm text-green-700 hover:underline">OK</button>
+          <button onClick={dismiss} className="px-3 py-1 text-sm text-note-conforme hover:underline">OK</button>
         </div>
       </div>
     );
@@ -95,14 +95,14 @@ export function NotificationsBanner({ data }: { data: any }) {
   if (dismissed) return null;
 
   return (
-    <div className="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4 flex items-center justify-between gap-3 flex-wrap">
+    <div className="bg-encre/5 border-l-4 border-ciel rounded-lg p-4 flex items-center justify-between gap-3 flex-wrap">
       <div className="flex items-center gap-3">
         <div className="text-2xl">🔔</div>
         <div>
-          <p className="font-medium text-blue-900">
+          <p className="font-medium text-encre">
             {perm === 'denied' ? 'Notifications bloquées' : 'Activez les notifications'}
           </p>
-          <p className="text-sm text-blue-700">
+          <p className="text-sm text-encre-fonce">
             {perm === 'denied'
               ? 'Déverrouillez l\'icône cadenas à gauche de l\'URL pour réactiver.'
               : 'Recevez un récap des contrôles du jour et des actions en retard à votre arrivée sur l\'app.'}
@@ -111,11 +111,11 @@ export function NotificationsBanner({ data }: { data: any }) {
       </div>
       <div className="flex gap-2">
         {perm === 'default' && (
-          <button onClick={request} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+          <button onClick={request} className="px-4 py-2 bg-encre text-white text-sm rounded-lg hover:bg-encre-fonce">
             Activer
           </button>
         )}
-        <button onClick={dismiss} className="px-3 py-2 text-sm text-blue-600 hover:underline">
+        <button onClick={dismiss} className="px-3 py-2 text-sm text-encre hover:underline">
           Plus tard
         </button>
       </div>

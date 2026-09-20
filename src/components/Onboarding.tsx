@@ -34,7 +34,7 @@ export function WelcomeModal({ userId, role: _role }: { userId: string; role: st
       title: 'Bienvenue dans la démo',
       body: (
         <>
-          <p className="mb-3 text-gray-700">Vous explorez une version d'essai avec des <strong>données fictives</strong> (3 sites, 12 contrôles, agents, actions correctives).</p>
+          <p className="mb-3 text-encre">Vous explorez une version d'essai avec des <strong>données fictives</strong> (3 sites, 12 contrôles, agents, actions correctives).</p>
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm text-purple-900">
             ✨ <strong>Aucune inscription requise.</strong> Vos modifications ne sont pas enregistrées et seront réinitialisées au prochain accès.
           </div>
@@ -42,11 +42,11 @@ export function WelcomeModal({ userId, role: _role }: { userId: string; role: st
       ),
     },
     {
-      icon: <ClipboardList className="w-16 h-16 text-blue-600 mx-auto" />,
+      icon: <ClipboardList className="w-16 h-16 text-encre mx-auto" />,
       title: 'Faites un contrôle en 3 étapes',
       body: (
         <>
-          <p className="mb-3 text-gray-700">Le cœur de l'app : une saisie pensée pour le terrain.</p>
+          <p className="mb-3 text-encre">Le cœur de l'app : une saisie pensée pour le terrain.</p>
           <ul className="space-y-1.5 text-left text-sm">
             <li>📋 Sélection des locaux à contrôler</li>
             <li>✅ Notation par critères pondérés (Conforme / Partiel / Non conforme)</li>
@@ -54,18 +54,18 @@ export function WelcomeModal({ userId, role: _role }: { userId: string; role: st
             <li>✍️ Signatures électroniques contrôleur + agent</li>
             <li>📊 Calcul automatique du taux de conformité</li>
           </ul>
-          <button onClick={() => goTo('/controles/nouveau')} className="mt-4 text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+          <button onClick={() => goTo('/controles/nouveau')} className="mt-4 text-sm bg-encre text-white px-4 py-2 rounded-lg hover:bg-encre-fonce">
             🚀 Essayer maintenant →
           </button>
         </>
       ),
     },
     {
-      icon: <BarChart3 className="w-16 h-16 text-blue-600 mx-auto" />,
+      icon: <BarChart3 className="w-16 h-16 text-encre mx-auto" />,
       title: 'Pilotez votre activité',
       body: (
         <>
-          <p className="mb-3 text-gray-700">Des indicateurs au service de votre management.</p>
+          <p className="mb-3 text-encre">Des indicateurs au service de votre management.</p>
           <ul className="space-y-1.5 text-left text-sm">
             <li>🗺️ Heatmap tous sites × mois</li>
             <li>🎯 Top critères en échec pour décider des formations</li>
@@ -73,25 +73,25 @@ export function WelcomeModal({ userId, role: _role }: { userId: string; role: st
             <li>⚠️ Détection automatique des sites en déclin</li>
             <li>📅 Planning récurrent (« tous les lundis pendant 3 mois »)</li>
           </ul>
-          <button onClick={() => goTo('/analytique')} className="mt-4 text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+          <button onClick={() => goTo('/analytique')} className="mt-4 text-sm bg-encre text-white px-4 py-2 rounded-lg hover:bg-encre-fonce">
             📊 Voir l'analytique →
           </button>
         </>
       ),
     },
     {
-      icon: <FileCheck className="w-16 h-16 text-blue-600 mx-auto" />,
+      icon: <FileCheck className="w-16 h-16 text-encre mx-auto" />,
       title: 'Transmettez à vos clients',
       body: (
         <>
-          <p className="mb-3 text-gray-700">Plusieurs façons de partager le résultat avec votre donneur d'ordre.</p>
+          <p className="mb-3 text-encre">Plusieurs façons de partager le résultat avec votre donneur d'ordre.</p>
           <ul className="space-y-1.5 text-left text-sm">
             <li>📄 PDF professionnel avec KPI + photos + signatures</li>
             <li>🔗 Lien web sécurisé (valable 90 jours, sans inscription)</li>
             <li>👤 Compte permanent en lecture seule sur ses sites</li>
             <li>📧 Email automatique pré-rempli au validateur</li>
           </ul>
-          <button onClick={() => goTo('/controles')} className="mt-4 text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+          <button onClick={() => goTo('/controles')} className="mt-4 text-sm bg-encre text-white px-4 py-2 rounded-lg hover:bg-encre-fonce">
             📂 Voir les contrôles →
           </button>
         </>
@@ -102,7 +102,7 @@ export function WelcomeModal({ userId, role: _role }: { userId: string; role: st
       title: 'Et bien plus encore',
       body: (
         <>
-          <p className="mb-3 text-gray-700">Quelques fonctionnalités qui font la différence :</p>
+          <p className="mb-3 text-encre">Quelques fonctionnalités qui font la différence :</p>
           <ul className="space-y-1.5 text-left text-sm">
             <li>🏢 Multi-utilisateurs avec rôles (admin / manager / contrôleur)</li>
             <li>✅ Workflow d'approbation manager</li>
@@ -116,20 +116,20 @@ export function WelcomeModal({ userId, role: _role }: { userId: string; role: st
       ),
     },
     {
-      icon: <CheckCircle className="w-16 h-16 text-green-600 mx-auto" />,
+      icon: <CheckCircle className="w-16 h-16 text-note-conforme mx-auto" />,
       title: 'Convaincu ? Créez votre compte',
       body: (
         <>
-          <p className="mb-3 text-gray-700">L'essai et la version Découverte sont <strong>gratuits à vie</strong>. Aucune carte bancaire requise.</p>
-          <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-900 mb-4">
+          <p className="mb-3 text-encre">L'essai et la version Découverte sont <strong>gratuits à vie</strong>. Aucune carte bancaire requise.</p>
+          <div className="bg-note-conforme/10 border border-note-conforme/20 rounded-lg p-3 text-sm text-note-conforme mb-4">
             ✓ Vos propres sites & contrôleurs<br />
             ✓ Vos propres clients en accès lecture<br />
             ✓ Vos données persistées en sécurité
           </div>
-          <button onClick={() => { close(); localStorage.removeItem('demo-mode'); window.location.href = '/login'; }} className="text-sm bg-gradient-to-r from-blue-600 to-purple-600 text-white px-5 py-2.5 rounded-lg hover:opacity-90 font-medium">
+          <button onClick={() => { close(); localStorage.removeItem('demo-mode'); window.location.href = '/login'; }} className="text-sm bg-gradient-to-r from-encre to-purple-600 text-white px-5 py-2.5 rounded-lg hover:opacity-90 font-medium">
             Créer mon compte gratuit →
           </button>
-          <p className="text-xs text-gray-500 mt-3">Vous pouvez aussi continuer à explorer la démo librement.</p>
+          <p className="text-xs text-acier mt-3">Vous pouvez aussi continuer à explorer la démo librement.</p>
         </>
       ),
     },
@@ -143,25 +143,25 @@ export function WelcomeModal({ userId, role: _role }: { userId: string; role: st
       <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-8 text-center max-h-[90vh] overflow-y-auto">
         {typeof slide.icon === 'string' ? <div className="text-6xl mb-3">{slide.icon}</div> : <div className="mb-3">{slide.icon}</div>}
         <h2 className="text-2xl font-bold mb-3">{slide.title}</h2>
-        <div className="text-gray-700 mb-6">{slide.body}</div>
+        <div className="text-encre mb-6">{slide.body}</div>
 
         <div className="flex justify-center gap-1 mb-4">
           {slides.map((_, i) => (
-            <div key={i} className={`h-2 rounded-full transition-all ${i === step ? 'w-8 bg-blue-600' : i < step ? 'w-2 bg-blue-300' : 'w-2 bg-gray-200'}`} />
+            <div key={i} className={`h-2 rounded-full transition-all ${i === step ? 'w-8 bg-encre' : i < step ? 'w-2 bg-ciel' : 'w-2 bg-filet-clair'}`} />
           ))}
         </div>
 
         <div className="flex justify-between gap-2">
           <button
             onClick={step === 0 ? close : () => setStep(step - 1)}
-            className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm"
+            className="px-4 py-2 text-acier hover:bg-papier rounded-lg text-sm"
           >
             {step === 0 ? 'Fermer' : '← Retour'}
           </button>
-          <div className="text-xs text-gray-400 self-center">{step + 1} / {slides.length}</div>
+          <div className="text-xs text-acier-clair self-center">{step + 1} / {slides.length}</div>
           <button
             onClick={isLast ? close : () => setStep(step + 1)}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="px-6 py-2 bg-encre text-white rounded-lg hover:bg-encre-fonce"
           >
             {isLast ? 'Continuer la démo' : 'Suivant →'}
           </button>
@@ -234,23 +234,23 @@ export function OnboardingChecklist({ userId, data, isAdminOrManager }: { userId
   };
 
   return (
-    <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-l-4 border-blue-600 rounded-lg p-4 shadow-sm">
+    <div className="bg-gradient-to-r from-papier to-purple-50 border-l-4 border-encre rounded-lg p-4 shadow-sm">
       <div className="flex justify-between items-start gap-2">
         <div className="flex-1">
-          <h2 className="font-semibold text-blue-900 flex items-center gap-2">
+          <h2 className="font-semibold text-encre flex items-center gap-2">
             🚀 Démarrez en {requiredCount} étapes
-            <span className="text-sm font-normal text-gray-600">({doneCount}/{requiredCount} faites)</span>
+            <span className="text-sm font-normal text-acier">({doneCount}/{requiredCount} faites)</span>
           </h2>
           {allDone && (
-            <p className="text-sm text-green-700 mt-1">🎉 Bravo, vous êtes opérationnel !</p>
+            <p className="text-sm text-note-conforme mt-1">🎉 Bravo, vous êtes opérationnel !</p>
           )}
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setCollapsed(!collapsed)} className="text-sm text-gray-500 hover:underline">
+          <button onClick={() => setCollapsed(!collapsed)} className="text-sm text-acier hover:underline">
             {collapsed ? '▼ Déplier' : '▲ Replier'}
           </button>
           {allDone && (
-            <button onClick={dismiss} className="text-sm text-gray-500 hover:underline">Masquer</button>
+            <button onClick={dismiss} className="text-sm text-acier hover:underline">Masquer</button>
           )}
         </div>
       </div>
@@ -261,17 +261,17 @@ export function OnboardingChecklist({ userId, data, isAdminOrManager }: { userId
             <Link
               key={t.key}
               to={t.href}
-              className={`block p-3 rounded-lg border ${t.done ? 'bg-white border-green-200 opacity-70' : 'bg-white border-gray-200 hover:border-blue-400 hover:shadow-sm'} transition`}
+              className={`block p-3 rounded-lg border ${t.done ? 'bg-white border-note-conforme/20 opacity-70' : 'bg-white border-filet hover:border-ciel hover:shadow-sm'} transition`}
             >
               <div className="flex items-center gap-3">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${t.done ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${t.done ? 'bg-note-conforme text-white' : 'bg-filet-clair text-acier'}`}>
                   {t.done ? '✓' : ''}
                 </div>
                 <div className="flex-1">
-                  <p className={`font-medium ${t.done ? 'line-through text-gray-500' : ''}`}>{t.label}</p>
-                  <p className="text-xs text-gray-500">{t.description}</p>
+                  <p className={`font-medium ${t.done ? 'line-through text-acier' : ''}`}>{t.label}</p>
+                  <p className="text-xs text-acier">{t.description}</p>
                 </div>
-                {!t.done && <ChevronLeft className="w-4 h-4 text-gray-400 rotate-180" />}
+                {!t.done && <ChevronLeft className="w-4 h-4 text-acier-clair rotate-180" />}
               </div>
             </Link>
           ))}
