@@ -64,14 +64,14 @@ export function SignaturePad({ value, onChange, label }: { value?: string | null
   return (
     <div className="space-y-2">
       <div className="flex justify-between items-center">
-        <p className="text-sm font-medium text-gray-700">{label}</p>
-        <button type="button" onClick={clear} className="text-xs text-gray-500 hover:underline">Effacer</button>
+        <p className="text-sm font-medium text-encre">{label}</p>
+        <button type="button" onClick={clear} className="text-xs text-acier hover:underline">Effacer</button>
       </div>
       <canvas
         ref={canvasRef}
         width={400}
         height={140}
-        className="border border-gray-300 rounded-lg w-full touch-none bg-white cursor-crosshair"
+        className="border border-filet rounded-lg w-full touch-none bg-white cursor-crosshair"
         onMouseDown={start}
         onMouseMove={move}
         onMouseUp={end}
@@ -80,7 +80,7 @@ export function SignaturePad({ value, onChange, label }: { value?: string | null
         onTouchMove={move}
         onTouchEnd={end}
       />
-      {empty && <p className="text-xs text-gray-400">Signez avec votre doigt ou souris</p>}
+      {empty && <p className="text-xs text-acier-clair">Signez avec votre doigt ou souris</p>}
     </div>
   );
 }

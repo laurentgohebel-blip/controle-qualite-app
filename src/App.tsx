@@ -24,15 +24,20 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine
 } from 'recharts';
+import { getConfig, type SectorConfig } from './lib/sectorConfig';
+import { calculerTauxSimple } from './lib/scoring';
 
 // ========== TYPES ==========
-type NoteType = 'Conforme' | 'Partiellement conforme' | 'Non conforme' | 'Non applicable';
-type TypeControle = 'Programmé' | 'Inopiné' | 'Contradictoire client';
+// Ces unions etaient le verrou sectoriel principal : toute valeur nouvelle
+// exigeait une recompilation. Les valeurs valides vivent desormais dans
+// sectorConfig.ts et sont validees a l'execution par le moteur de scoring.
+type NoteType = string;
+type TypeControle = string;
 type StatutControle = 'Planifié' | 'Brouillon' | 'Terminé' | 'Validé';
 type StatutAction = 'Ouverte' | 'En cours' | 'Soldée';
-type TypeLocal = 'Bureau' | 'Sanitaire' | 'Circulation' | 'Vestiaire' | 'Cuisine/Office' | 'Vitrerie' | 'Extérieur';
-type Categorie = 'Sols' | 'Sanitaires' | 'Surfaces' | 'Poussières' | 'Déchets' | 'Vitrerie' | 'Approvisionnement consommables';
-type Frequence = 'Hebdomadaire' | 'Mensuelle';
+type TypeLocal = string;
+type Categorie = string;
+type Frequence = string;
 type IconType = React.ElementType;
 
 // ========== INTERFACES ==========
@@ -153,19 +158,19 @@ const MOCK_AGENTS: Agent[] = [
   { id: 'a3', nom: 'Bernard', prenom: 'Pierre', siteId: 's2' },
 ];
 
-const NOTE_SCORES: Record<NoteType, number> = {
-  'Conforme': 1,
-  'Partiellement conforme': 0.5,
-  'Non conforme': 0,
-  'Non applicable': 0
-};
+// Source unique de verite : la configuration sectorielle.
+// Ne plus ajouter d'echelon ici — l'ajouter dans sectorConfig.ts.
+const ACTIVE_CONFIG: SectorConfig = getConfig(
+  typeof window !== 'undefined' ? localStorage.getItem('secteur') : null
+);
 
-const NOTE_COLORS: Record<NoteType, string> = {
-  'Conforme': 'bg-green-500',
-  'Partiellement conforme': 'bg-yellow-500',
-  'Non conforme': 'bg-red-500',
-  'Non applicable': 'bg-gray-400'
-};
+const NOTE_COLORS: Record<string, string> = Object.fromEntries(
+  ACTIVE_CONFIG.notes.map(n => [n.cle, n.couleur])
+);
+
+const NOTES_ORDRE: string[] = ACTIVE_CONFIG.notes.map(n => n.cle);
+const NOTES_DECLENCHANT_ACTION: string[] = ACTIVE_CONFIG.notes.filter(n => n.declencheAction).map(n => n.cle);
+const SEUIL_DEFAUT = ACTIVE_CONFIG.scoring.seuilCibleDefaut;
 
 // ========== CONTEXTE & STORAGE ==========
 interface Template {
@@ -544,20 +549,7 @@ function calculateTauxConformite(
   criteres: Critere[]
 ): number {
   const controleResultats = resultats.filter(r => r.controleId === controleId);
-  if (controleResultats.length === 0) return 0;
-
-  let sommePonderee = 0;
-  let sommeMaxPossible = 0;
-
-  for (const r of controleResultats) {
-    const c = criteres.find(cr => cr.id === r.critereId);
-    if (!c || r.note === 'Non applicable') continue;
-    sommePonderee += NOTE_SCORES[r.note] * c.coefficient;
-    sommeMaxPossible += c.coefficient;
-  }
-
-  if (sommeMaxPossible === 0) return 0;
-  return Math.round((sommePonderee / sommeMaxPossible) * 100);
+  return calculerTauxSimple(controleResultats as any, ACTIVE_CONFIG, criteres as any);
 }
 
 // ========== COMPOSANTS UI ==========
@@ -570,24 +562,26 @@ function Button({
   icon: Icon
 }: {
   children: React.ReactNode;
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
+  variant?: 'primary' | 'accent' | 'secondary' | 'outline' | 'ghost';
   onClick?: () => void;
   disabled?: boolean;
   className?: string;
   icon?: IconType;
 }) {
+  // 'accent' : l'action principale de l'ecran, une seule a la fois.
   const variants = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700',
-    secondary: 'bg-gray-100 text-gray-900 hover:bg-gray-200',
-    outline: 'border border-gray-300 bg-transparent text-gray-700 hover:bg-gray-50',
-    ghost: 'bg-transparent text-gray-700 hover:bg-gray-100'
+    primary: 'bg-encre text-white hover:bg-encre-fonce',
+    accent: 'bg-ciel text-encre hover:brightness-95',
+    secondary: 'bg-papier text-encre hover:bg-filet-clair',
+    outline: 'border border-filet bg-transparent text-encre hover:bg-papier',
+    ghost: 'bg-transparent text-acier hover:bg-papier'
   };
 
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+      className={`inline-flex items-center justify-center gap-2 px-4 min-h-11 rounded-commande font-medium transition-colors ${
         variants[variant]
       } ${
         disabled ? 'opacity-50 cursor-not-allowed' : ''
@@ -607,11 +601,11 @@ function Badge({
   variant?: 'default' | 'success' | 'warning' | 'danger' | 'info';
 }) {
   const variants = {
-    default: 'bg-gray-100 text-gray-800',
-    success: 'bg-green-100 text-green-800',
-    warning: 'bg-yellow-100 text-yellow-800',
-    danger: 'bg-red-100 text-red-800',
-    info: 'bg-blue-100 text-blue-800'
+    default: 'bg-papier text-acier',
+    success: 'bg-note-conforme/10 text-note-conforme',
+    warning: 'bg-note-partiel/10 text-note-partiel',
+    danger: 'bg-note-nc/10 text-note-nc',
+    info: 'bg-encre/10 text-encre'
   };
 
   return (
@@ -631,7 +625,7 @@ function Card({
   className?: string;
 }) {
   return (
-    <div className={`bg-white p-6 rounded-xl shadow-sm border border-gray-200 ${className}`}>
+    <div className={`bg-white p-6 border border-filet ${className}`}>
       {children}
     </div>
   );
@@ -657,9 +651,9 @@ function Input({
   return (
     <div className="space-y-1">
       {label && (
-        <label className="block text-sm font-medium text-gray-700">
+        <label className="block text-sm font-medium text-acier">
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && <span className="text-note-nc ml-1">*</span>}
         </label>
       )}
       <input
@@ -669,7 +663,7 @@ function Input({
         placeholder={placeholder}
         required={required}
         disabled={disabled}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+        className="w-full px-3 min-h-11 bg-white border border-filet rounded-commande focus:ring-2 focus:ring-ciel focus:border-ciel disabled:bg-papier disabled:cursor-not-allowed"
       />
     </div>
   );
@@ -693,9 +687,9 @@ function Select({
   return (
     <div className="space-y-1">
       {label && (
-        <label className="block text-sm font-medium text-gray-700">
+        <label className="block text-sm font-medium text-acier">
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && <span className="text-note-nc ml-1">*</span>}
         </label>
       )}
       <select
@@ -703,7 +697,7 @@ function Select({
         onChange={onChange}
         required={required}
         disabled={disabled}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+        className="w-full px-3 min-h-11 bg-white border border-filet rounded-commande focus:ring-2 focus:ring-ciel focus:border-ciel disabled:bg-papier disabled:cursor-not-allowed"
       >
         <option value="">
           {label ? `Sélectionner ${label.toLowerCase()}` : 'Sélectionner'}
@@ -736,9 +730,9 @@ function Textarea({
   return (
     <div className="space-y-1">
       {label && (
-        <label className="block text-sm font-medium text-gray-700">
+        <label className="block text-sm font-medium text-acier">
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && <span className="text-note-nc ml-1">*</span>}
         </label>
       )}
       <textarea
@@ -747,7 +741,7 @@ function Textarea({
         placeholder={placeholder}
         rows={rows}
         required={required}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical"
+        className="w-full px-3 py-2 bg-white border border-filet rounded-commande focus:ring-2 focus:ring-ciel focus:border-ciel resize-vertical"
       />
     </div>
   );
@@ -764,19 +758,31 @@ function NoteButton({
   onSelect: (note: NoteType) => void;
   disabled?: boolean;
 }) {
+  const ech = ACTIVE_CONFIG.notes.find(n => n.cle === note);
+  // Segment pleine largeur : la couleur inonde la cellule choisie.
+  // Compacte quand le bouton sert d'etiquette de lecture (disabled).
+  if (disabled) {
+    return (
+      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-medium rounded-commande ${NOTE_COLORS[note]}`}>
+        <span className="font-cond text-sm font-bold leading-none">{ech?.lettre || ''}</span>
+        {ech?.libelle || note}
+      </span>
+    );
+  }
   return (
     <button
-      onClick={() => !disabled && onSelect(note)}
-      disabled={disabled}
-      className={`px-4 py-2.5 sm:px-3 sm:py-1.5 text-white text-sm sm:text-xs font-medium rounded-lg min-h-[44px] sm:min-h-0 ${
-        NOTE_COLORS[note]
-      } ${
-        selected ? 'ring-2 ring-white ring-offset-2' : ''
-      } ${
-        disabled ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90 active:scale-95'
+      type="button"
+      onClick={() => onSelect(note)}
+      aria-label={`Noter ${ech?.libelle || note}`}
+      aria-pressed={selected}
+      className={`flex-1 basis-0 min-h-[72px] flex flex-col items-center justify-center gap-1 px-1 transition-colors active:scale-[0.98] ${
+        selected
+          ? `${NOTE_COLORS[note]} text-white`
+          : 'bg-white text-encre border-l border-filet first:border-l-0 hover:bg-papier'
       }`}
     >
-      {note}
+      <span className="font-cond text-[26px] font-bold leading-none">{ech?.lettre || ''}</span>
+      <span className="text-[10.5px] font-medium leading-tight text-center">{ech?.abrege || note}</span>
     </button>
   );
 }
@@ -861,8 +867,8 @@ function DashboardPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Tableau de bord</h1>
-          <p className="text-gray-500">
+          <h1 className="text-2xl font-bold text-encre">Tableau de bord</h1>
+          <p className="text-acier">
             Bienvenue {currentUser ? `${currentUser.prenom} ${currentUser.nom}` : ''}
           </p>
         </div>
@@ -875,12 +881,12 @@ function DashboardPage() {
       {actionsEnRetard > 0 && (
         <div
           onClick={() => navigate('/actions')}
-          className="cursor-pointer p-4 bg-red-50 border-l-4 border-red-500 rounded-lg flex items-center gap-3 hover:bg-red-100"
+          className="cursor-pointer p-4 bg-note-nc/10 border-l-4 border-note-nc rounded-lg flex items-center gap-3 hover:bg-note-nc/10"
         >
-          <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0" />
+          <AlertCircle className="w-6 h-6 text-note-nc flex-shrink-0" />
           <div>
-            <p className="font-semibold text-red-900">{actionsEnRetard} action{actionsEnRetard > 1 ? 's' : ''} en retard</p>
-            <p className="text-sm text-red-700">Cliquez pour les traiter →</p>
+            <p className="font-semibold text-note-nc">{actionsEnRetard} action{actionsEnRetard > 1 ? 's' : ''} en retard</p>
+            <p className="text-sm text-note-nc">Cliquez pour les traiter →</p>
           </div>
         </div>
       )}
@@ -890,12 +896,12 @@ function DashboardPage() {
         return declin.length > 0 ? (
           <div
             onClick={() => navigate('/analytique')}
-            className="cursor-pointer p-4 bg-orange-50 border-l-4 border-orange-500 rounded-lg flex items-center gap-3 hover:bg-orange-100"
+            className="cursor-pointer p-4 bg-note-alerte/10 border-l-4 border-note-alerte rounded-lg flex items-center gap-3 hover:bg-note-alerte/20"
           >
-            <AlertCircle className="w-6 h-6 text-orange-600 flex-shrink-0" />
+            <AlertCircle className="w-6 h-6 text-note-alerte flex-shrink-0" />
             <div>
-              <p className="font-semibold text-orange-900">{declin.length} site{declin.length > 1 ? 's' : ''} en déclin</p>
-              <p className="text-sm text-orange-700">Taux en baisse 3 mois de suite — voir l'analytique →</p>
+              <p className="font-semibold text-note-alerte">{declin.length} site{declin.length > 1 ? 's' : ''} en déclin</p>
+              <p className="text-sm text-note-alerte">Taux en baisse 3 mois de suite — voir l'analytique →</p>
             </div>
           </div>
         ) : null;
@@ -904,11 +910,11 @@ function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <ClipboardList className="w-6 h-6 text-blue-600" />
+            <div className="p-3 bg-encre/10 rounded-lg">
+              <ClipboardList className="w-6 h-6 text-encre" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Contrôles totaux</p>
+              <p className="text-sm text-acier">Contrôles totaux</p>
               <p className="text-2xl font-bold">{totalControles}</p>
             </div>
           </div>
@@ -916,11 +922,11 @@ function DashboardPage() {
 
         <Card>
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-green-100 rounded-lg">
-              <CheckCircle className="w-6 h-6 text-green-600" />
+            <div className="p-3 bg-note-conforme/10 rounded-lg">
+              <CheckCircle className="w-6 h-6 text-note-conforme" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Contrôles ce mois</p>
+              <p className="text-sm text-acier">Contrôles ce mois</p>
               <p className="text-2xl font-bold">{controlesDuMois}</p>
             </div>
           </div>
@@ -928,11 +934,11 @@ function DashboardPage() {
 
         <Card>
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-yellow-100 rounded-lg">
-              <AlertCircle className="w-6 h-6 text-yellow-600" />
+            <div className="p-3 bg-note-partiel/10 rounded-lg">
+              <AlertCircle className="w-6 h-6 text-note-partiel" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Actions ouvertes</p>
+              <p className="text-sm text-acier">Actions ouvertes</p>
               <p className="text-2xl font-bold">{actionsOuvertes}</p>
             </div>
           </div>
@@ -940,11 +946,11 @@ function DashboardPage() {
 
         <Card>
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-red-100 rounded-lg">
-              <Clock className="w-6 h-6 text-red-600" />
+            <div className="p-3 bg-note-nc/10 rounded-lg">
+              <Clock className="w-6 h-6 text-note-nc" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Actions en retard</p>
+              <p className="text-sm text-acier">Actions en retard</p>
               <p className="text-2xl font-bold">{actionsEnRetard}</p>
             </div>
           </div>
@@ -962,7 +968,7 @@ function DashboardPage() {
                 <YAxis domain={[0, 100]} />
                 <Tooltip />
                 <Bar dataKey="valeur" name="Taux moyen" fill="#3B82F6" />
-                <ReferenceLine y={90} stroke="#EF4444" strokeDasharray="3 3" label="Seuil" />
+                <ReferenceLine y={SEUIL_DEFAUT} stroke="#EF4444" strokeDasharray="3 3" label="Seuil" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -1069,19 +1075,19 @@ function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-papier">
       <Card className="w-full max-w-md">
         <div className="text-center mb-6">
-          <Building2 className="w-16 h-16 text-blue-600 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900">Contrôle Qualité Propreté</h1>
-          <p className="text-gray-500 mt-2">
+          <Building2 className="w-16 h-16 text-encre mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-encre">Contrôle Qualité Propreté</h1>
+          <p className="text-acier mt-2">
             {mode === 'login' && 'Connectez-vous pour continuer'}
             {mode === 'signup' && 'Créez votre compte'}
             {mode === 'forgot' && 'Réinitialiser votre mot de passe'}
           </p>
         </div>
-        {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg mb-4 text-sm text-red-600">{error}</div>}
-        {info && <div className="p-3 bg-green-50 border border-green-200 rounded-lg mb-4 text-sm text-green-700">{info}</div>}
+        {error && <div className="p-3 bg-note-nc/10 border border-note-nc/20 rounded-lg mb-4 text-sm text-note-nc">{error}</div>}
+        {info && <div className="p-3 bg-note-conforme/10 border border-note-conforme/20 rounded-lg mb-4 text-sm text-note-conforme">{info}</div>}
 
         {mode === 'login' && (
           <form onSubmit={handleLogin} className="space-y-4">
@@ -1089,14 +1095,14 @@ function LoginPage() {
             <Input label="Mot de passe" type="password" value={password} onChange={(e: any) => setPassword(e.target.value)} required />
             <Button onClick={handleLogin as any} disabled={busy} className="w-full">{busy ? '...' : 'Se connecter'}</Button>
             <div className="flex justify-between text-sm pt-2">
-              <button type="button" onClick={() => { reset(); setMode('signup'); }} className="text-blue-600 hover:underline">Créer un compte</button>
-              <button type="button" onClick={() => { reset(); setMode('forgot'); }} className="text-blue-600 hover:underline">Mot de passe oublié ?</button>
+              <button type="button" onClick={() => { reset(); setMode('signup'); }} className="text-encre hover:underline">Créer un compte</button>
+              <button type="button" onClick={() => { reset(); setMode('forgot'); }} className="text-encre hover:underline">Mot de passe oublié ?</button>
             </div>
-            <div className="pt-3 border-t border-gray-200">
-              <button type="button" onClick={handleDemo} disabled={busy} className="w-full text-sm bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
+            <div className="pt-3 border-t border-filet">
+              <button type="button" onClick={handleDemo} disabled={busy} className="w-full text-sm bg-gradient-to-r from-purple-600 to-encre text-white px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
                 🚀 Voir la démo sans inscription
               </button>
-              <p className="text-xs text-gray-400 text-center mt-2">Explorez l'app avec des données fictives</p>
+              <p className="text-xs text-acier-clair text-center mt-2">Explorez l'app avec des données fictives</p>
             </div>
           </form>
         )}
@@ -1106,9 +1112,9 @@ function LoginPage() {
             <Input label="Email" type="email" value={email} onChange={(e: any) => setEmail(e.target.value)} required />
             <Input label="Mot de passe" type="password" value={password} onChange={(e: any) => setPassword(e.target.value)} required />
             <Input label="Nom de votre société" value={orgName} onChange={(e: any) => setOrgName(e.target.value)} placeholder="ex: Propreté Service SARL" />
-            <p className="text-xs text-gray-500">Si vous avez reçu une invitation, laissez ce champ vide — vous rejoindrez l'organisation qui vous a invité.</p>
+            <p className="text-xs text-acier">Si vous avez reçu une invitation, laissez ce champ vide — vous rejoindrez l'organisation qui vous a invité.</p>
             <Button onClick={handleSignup as any} disabled={busy} className="w-full">{busy ? '...' : 'Créer mon compte'}</Button>
-            <button type="button" onClick={() => { reset(); setMode('login'); }} className="text-sm text-blue-600 hover:underline w-full text-center">Déjà un compte ? Se connecter</button>
+            <button type="button" onClick={() => { reset(); setMode('login'); }} className="text-sm text-encre hover:underline w-full text-center">Déjà un compte ? Se connecter</button>
           </form>
         )}
 
@@ -1116,7 +1122,7 @@ function LoginPage() {
           <form onSubmit={handleForgot} className="space-y-4">
             <Input label="Email" type="email" value={email} onChange={(e: any) => setEmail(e.target.value)} required />
             <Button onClick={handleForgot as any} disabled={busy} className="w-full">{busy ? '...' : 'Envoyer le lien'}</Button>
-            <button type="button" onClick={() => { reset(); setMode('login'); }} className="text-sm text-blue-600 hover:underline w-full text-center">Retour à la connexion</button>
+            <button type="button" onClick={() => { reset(); setMode('login'); }} className="text-sm text-encre hover:underline w-full text-center">Retour à la connexion</button>
           </form>
         )}
       </Card>
@@ -1163,6 +1169,7 @@ function NouveauControlePage() {
   });
   const [currentLocalIndex, setCurrentLocalIndex] = useState(0);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [critereOuvert, setCritereOuvert] = useState<string | null>(null);
 
   // Auto-save brouillon (mode hors-ligne friendly)
   useEffect(() => {
@@ -1214,6 +1221,9 @@ function NouveauControlePage() {
         nr[i] = { ...nr[i], note };
         return nr;
       }
+      // Le resultat porte le critere tel qu'il est AU MOMENT de la notation.
+      // Sans cela, modifier ou supprimer un critere reecrit l'historique.
+      const critere = data.criteres.find((c: any) => c.id === critereId);
       return [...prev, {
         id: generateId(),
         controleId: controle.id,
@@ -1221,7 +1231,11 @@ function NouveauControlePage() {
         localId: currentLocal?.id || '',
         note,
         photo: null,
-        commentaire: ''
+        commentaire: '',
+        critereLibelle: critere?.libelle ?? null,
+        critereCategorie: critere?.categorie ?? null,
+        coefficient: critere?.coefficient ?? null,
+        criticite: (critere as any)?.criticite ?? 'normale'
       }];
     });
   };
@@ -1273,14 +1287,30 @@ function NouveauControlePage() {
       }
     }
     else if (step === 3) {
-      const nc = { ...controle, tauxConformite: tauxCalcule, statut: 'Terminé' };
+      // Gel du referentiel : le controle devient auto-portant.
+      const grilleSnapshot = resultats.map(r => ({
+        critereId: r.critereId,
+        libelle: (r as any).critereLibelle,
+        categorie: (r as any).critereCategorie,
+        coefficient: (r as any).coefficient,
+        criticite: (r as any).criticite ?? 'normale',
+      }));
+      const nc = {
+        ...controle,
+        tauxConformite: tauxCalcule,
+        statut: 'Terminé',
+        configVersion: ACTIVE_CONFIG.version,
+        configSnapshot: { version: ACTIVE_CONFIG.version, secteur: ACTIVE_CONFIG.secteur, notes: ACTIVE_CONFIG.notes, scoring: ACTIVE_CONFIG.scoring },
+        grilleSnapshot,
+        geleAt: new Date().toISOString(),
+      };
       const finalResultats = resultats.map(r => ({ ...r, id: r.id || generateId() }));
       const newActions = resultats
-        .filter(r => r.note === 'Non conforme')
+        .filter(r => NOTES_DECLENCHANT_ACTION.includes(r.note))
         .map(r => ({
           id: generateId(),
           controleId: nc.id,
-          descriptionNc: `Non-conformité: ${getCritereById(data.criteres, r.critereId)?.libelle || 'Critère inconnu'}`,
+          descriptionNc: `Non-conformité: ${(r as any).critereLibelle || getCritereById(data.criteres, r.critereId)?.libelle || 'Critère inconnu'}`,
           action: 'À définir',
           responsableId: nc.agentEvalueId,
           echeance: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -1341,12 +1371,12 @@ function NouveauControlePage() {
     <div className="space-y-6">
       <div className="flex items-center gap-4 justify-between flex-wrap">
         <div className="flex items-center gap-4">
-          <button onClick={handlePrev} className="p-2 hover:bg-gray-100 rounded-lg">
+          <button onClick={handlePrev} className="p-2 hover:bg-papier rounded-lg">
             {step > 1 ? <ChevronLeft /> : <Home />}
           </button>
           <div>
             <h1 className="text-2xl font-bold">{brouillon ? 'Reprendre le brouillon' : 'Nouveau contrôle'}</h1>
-            <p className="text-gray-500">Étape {step} sur 3</p>
+            <p className="text-acier">Étape {step} sur 3</p>
           </div>
         </div>
         {step >= 2 && (
@@ -1360,7 +1390,7 @@ function NouveauControlePage() {
         {[1, 2, 3].map(s => (
           <div
             key={s}
-            className={`h-2 flex-1 rounded-full ${s <= step ? 'bg-blue-500' : 'bg-gray-200'}`}
+            className={`h-2 flex-1 rounded-full ${s <= step ? 'bg-ciel' : 'bg-filet-clair'}`}
           />
         ))}
       </div>
@@ -1415,7 +1445,7 @@ function NouveauControlePage() {
                     key={local.id}
                     onClick={() => handleToggleLocal(local.id)}
                     className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                      isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                      isSelected ? 'border-ciel bg-encre/5' : 'border-filet hover:border-filet'
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -1427,7 +1457,7 @@ function NouveauControlePage() {
                       />
                       <div>
                         <p className="font-medium">{local.nom}</p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-acier">
                           {local.type} - {local.surface}m² - {local.etage}
                         </p>
                       </div>
@@ -1445,130 +1475,183 @@ function NouveauControlePage() {
       )}
 
       {step === 2 && currentLocal && (
-        <div className="space-y-4">
-          <Card>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold">{currentLocal.nom}</h2>
-              <Badge variant="info">
-                {currentLocal.type} - {currentLocal.surface}m² - {currentLocal.etage}
-              </Badge>
-            </div>
+        <div className="-mx-4 sm:mx-0">
+          {/* Avancement des locaux : un segment par local, le courant en ciel */}
+          <div className="flex gap-1 bg-encre px-4 py-2.5">
+            {selectedLocaux.map((id, i) => (
+              <div
+                key={id}
+                className={`h-1 flex-1 rounded-sm ${
+                  i < currentLocalIndex ? 'bg-white' : i === currentLocalIndex ? 'bg-ciel' : 'bg-encre-filet'
+                }`}
+              />
+            ))}
+          </div>
 
-            <p className="text-sm text-gray-500 mb-4">
-              Local {currentLocalIndex + 1} / {selectedLocaux.length}
-            </p>
-
-            <div className="mb-4">
-              <div className="h-2 bg-gray-200 rounded-full">
-                <div
-                  className="h-full bg-blue-500 rounded-full transition-all"
-                  style={{
-                    width: `${criteresPourLocal.length ? (resultats.filter(r => r.localId === currentLocal.id).length / criteresPourLocal.length) * 100 : 0}%`
-                  }}
-                />
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                {resultats.filter(r => r.localId === currentLocal.id).length} / {criteresPourLocal.length} critères notés
+          {/* En-tete de local, colle en haut pendant le defilement */}
+          <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-filet bg-white px-4 py-3">
+            <div className="min-w-0">
+              <h2 className="truncate text-[17px] font-semibold">{currentLocal.nom}</h2>
+              <p className="font-cond text-sm text-acier">
+                {currentLocal.type}
+                {currentLocal.etage ? `, ${currentLocal.etage}` : ''}
+                {currentLocal.surface ? `, ${currentLocal.surface} m²` : ''}
               </p>
             </div>
+            <span className="tabulaire shrink-0 font-cond text-[15px] text-acier">
+              {resultats.filter(r => r.localId === currentLocal.id).length} / {criteresPourLocal.length} notés
+            </span>
+          </div>
 
-            <div className="space-y-4">
-              {criteresPourLocal.map((critere: any, index: number) => {
-                const resultat = resultats.find(r =>
-                  r.critereId === critere.id && r.localId === currentLocal.id
-                );
-                const note = resultat?.note;
+          {/* Lignes pleine largeur : une par critere */}
+          <div className="border-b border-filet bg-white">
+            {criteresPourLocal.map((critere: any) => {
+              const resultat = resultats.find(r =>
+                r.critereId === critere.id && r.localId === currentLocal.id
+              );
+              const note = resultat?.note;
+              const ech = ACTIVE_CONFIG.notes.find(n => n.cle === note);
+              const ouvert = critereOuvert === critere.id;
 
-                return (
-                  <div key={critere.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <p className="font-medium">{index + 1}. {critere.libelle}</p>
-                        <p className="text-xs text-gray-500">
-                          {critere.categorie} - Coefficient: {critere.coefficient}
-                        </p>
+              return (
+                <div key={critere.id}>
+                  <button
+                    type="button"
+                    onClick={() => setCritereOuvert(ouvert ? null : critere.id)}
+                    aria-expanded={ouvert}
+                    className={`flex min-h-[68px] w-full items-center justify-between gap-3 border-b border-filet-clair px-4 text-left transition-colors ${
+                      ouvert ? 'bg-encre text-white' : 'bg-white hover:bg-papier'
+                    }`}
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-[15px] font-medium">{critere.libelle}</span>
+                      <span className={`block font-cond text-[13.5px] ${ouvert ? 'text-brume' : 'text-acier'}`}>
+                        {critere.categorie}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2.5">
+                      <span className={`tabulaire w-4 text-right font-cond text-[15px] font-semibold ${ouvert ? 'text-brume' : 'text-acier-clair'}`}>
+                        {critere.coefficient}
+                      </span>
+                      <span
+                        className={`flex h-[30px] w-[30px] items-center justify-center rounded-commande font-cond text-[17px] font-bold leading-none ${
+                          note
+                            ? `${NOTE_COLORS[note]} text-white`
+                            : ouvert
+                              ? 'border border-encre-filet text-brume'
+                              : 'border border-filet text-acier-clair'
+                        }`}
+                      >
+                        {note ? (ech?.lettre || '') : '·'}
+                      </span>
+                    </span>
+                  </button>
+
+                  {ouvert && (
+                    <div className="bg-white">
+                      {/* Barre de notation : le seul endroit ou la couleur inonde */}
+                      <div className="flex border-b border-filet">
+                        {NOTES_ORDRE.map(n => (
+                          <NoteButton
+                            key={n}
+                            note={n}
+                            selected={note === n}
+                            onSelect={(nn: any) => {
+                              handleSetNote(critere.id, nn);
+                              const suivant = criteresPourLocal.find((c: any) =>
+                                c.id !== critere.id &&
+                                !resultats.some(r => r.critereId === c.id && r.localId === currentLocal.id)
+                              );
+                              setCritereOuvert(suivant ? suivant.id : null);
+                            }}
+                          />
+                        ))}
                       </div>
-                    </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      {(['Conforme', 'Partiellement conforme', 'Non conforme', 'Non applicable'] as const).map(n => (
-                        <NoteButton
-                          key={n}
-                          note={n}
-                          selected={note === n}
-                          onSelect={(nn: any) => handleSetNote(critere.id, nn)}
+                      <div className="space-y-3 px-4 py-4">
+                        <Textarea
+                          label="Commentaire"
+                          value={resultat?.commentaire || ''}
+                          onChange={(e: any) => handleSetCommentaire(critere.id, e.target.value)}
+                          placeholder="Ajouter un commentaire..."
+                          rows={2}
                         />
-                      ))}
-                    </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {data.commentairesTypes
+                            .filter((t: any) => !t.note || t.note === (resultat?.note || NOTES_ORDRE[0]))
+                            .slice(0, 6)
+                            .map((t: any) => (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => handleSetCommentaire(critere.id, ((resultat?.commentaire || '') + ' ' + t.libelle).trim())}
+                                className="rounded-commande border border-filet bg-white px-3 py-2 text-xs text-encre hover:bg-papier active:scale-95"
+                              >
+                                {t.libelle}
+                              </button>
+                            ))}
+                          <VoiceButton onResult={(text) => handleSetCommentaire(critere.id, ((resultat?.commentaire || '') + ' ' + text).trim())} />
+                        </div>
 
-                    <div className="mt-3">
-                      <Textarea
-                        label="Commentaire"
-                        value={resultat?.commentaire || ''}
-                        onChange={(e: any) => handleSetCommentaire(critere.id, e.target.value)}
-                        placeholder="Ajouter un commentaire..."
-                        rows={2}
-                      />
-                      <div className="flex flex-wrap gap-1 mt-2 items-center">
-                        {data.commentairesTypes
-                          .filter((t: any) => !t.note || t.note === (resultat?.note || 'Conforme'))
-                          .slice(0, 6)
-                          .map((t: any) => (
-                            <button
-                              key={t.id}
-                              type="button"
-                              onClick={() => handleSetCommentaire(critere.id, ((resultat?.commentaire || '') + ' ' + t.libelle).trim())}
-                              className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-3 py-2 rounded-full hover:bg-blue-100 active:scale-95"
-                            >+ {t.libelle}</button>
-                          ))}
-                        <VoiceButton onResult={(text) => handleSetCommentaire(critere.id, ((resultat?.commentaire || '') + ' ' + text).trim())} />
-                      </div>
-                    </div>
-
-                    <div className="mt-3 flex items-center gap-3">
-                      <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 active:scale-95 text-sm min-h-[44px]">
-                        <Camera className="w-4 h-4" />
-                        Photo
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          className="hidden"
-                          onChange={async (e) => {
-                            const f = e.target.files?.[0];
-                            if (!f) return;
-                            try {
-                              const url = await uploadPhoto(f);
-                              setResultats(prev => {
-                                const i = prev.findIndex(r => r.critereId === critere.id && r.localId === currentLocal.id);
-                                if (i >= 0) {
-                                  const nr = [...prev];
-                                  nr[i] = { ...nr[i], photo: url };
-                                  return nr;
+                        <div className="flex items-center gap-3">
+                          <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-commande border border-filet bg-white px-4 text-sm hover:bg-papier active:scale-95">
+                            <Camera className="h-4 w-4" />
+                            Photo
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const f = e.target.files?.[0];
+                                if (!f) return;
+                                try {
+                                  const url = await uploadPhoto(f);
+                                  setResultats(prev => {
+                                    const i = prev.findIndex(r => r.critereId === critere.id && r.localId === currentLocal.id);
+                                    if (i >= 0) {
+                                      const nr = [...prev];
+                                      nr[i] = { ...nr[i], photo: url };
+                                      return nr;
+                                    }
+                                    return [...prev, { id: generateId(), controleId: controle.id, critereId: critere.id, localId: currentLocal.id, note: NOTES_ORDRE[0], photo: url, commentaire: '' }];
+                                  });
+                                } catch (err: any) {
+                                  alert('Erreur upload: ' + (err.message || err));
                                 }
-                                return [...prev, { id: generateId(), controleId: controle.id, critereId: critere.id, localId: currentLocal.id, note: 'Conforme', photo: url, commentaire: '' }];
-                              });
-                            } catch (err: any) {
-                              alert('Erreur upload: ' + (err.message || err));
-                            }
-                          }}
-                        />
-                      </label>
-                      {resultat?.photo && (
-                        <img src={resultat.photo} alt="" className="w-16 h-16 object-cover rounded border" />
-                      )}
+                              }}
+                            />
+                          </label>
+                          {resultat?.photo && (
+                            <img src={resultat.photo} alt="" className="h-16 w-16 rounded-commande border border-filet object-cover" />
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
+                  )}
+                </div>
+              );
+            })}
+          </div>
 
-          <div className="flex justify-between">
-            <Button variant="secondary" onClick={handlePrev}>← Retour</Button>
-            <Button onClick={handleNext}>
-              {currentLocalIndex < selectedLocaux.length - 1 ? 'Local suivant →' : 'Continuer →'}
-            </Button>
+          {/* Pied colle en bas : le taux se recalcule a chaque note */}
+          <div className="sticky bottom-0 flex items-center justify-between gap-3 bg-encre px-4 py-3 text-white">
+            <div>
+              <p className="font-cond text-sm text-brume">Taux provisoire</p>
+              <p className="tabulaire font-cond text-[30px] font-bold leading-none">{tauxCalcule}%</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handlePrev}
+                className="min-h-11 rounded-commande px-3 text-sm font-medium text-brume hover:text-white"
+              >
+                Retour
+              </button>
+              <Button variant="accent" onClick={handleNext}>
+                {currentLocalIndex < selectedLocaux.length - 1 ? 'Local suivant' : 'Continuer'}
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -1578,23 +1661,23 @@ function NouveauControlePage() {
           <Card>
             <h2 className="text-lg font-semibold mb-4">Récapitulatif du contrôle</h2>
 
-            <div className="p-4 bg-gray-50 rounded-lg mb-6">
-              <h3 className="font-medium text-gray-900 mb-3">Informations générales</h3>
+            <div className="p-4 bg-papier rounded-lg mb-6">
+              <h3 className="font-medium text-encre mb-3">Informations générales</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
-                  <p className="text-gray-500">Site</p>
+                  <p className="text-acier">Site</p>
                   <p className="font-medium">{getSiteById(data.sites, controle.siteId)?.nom}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500">Type de contrôle</p>
+                  <p className="text-acier">Type de contrôle</p>
                   <Badge variant="info">{controle.type}</Badge>
                 </div>
                 <div>
-                  <p className="text-gray-500">Date</p>
+                  <p className="text-acier">Date</p>
                   <p className="font-medium">{formatDate(controle.date || '')}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500">Agent évalué</p>
+                  <p className="text-acier">Agent évalué</p>
                   <p className="font-medium">
                     {getAgentById(data.agents, controle.agentEvalueId)?.prenom || ''}{' '}
                     {getAgentById(data.agents, controle.agentEvalueId)?.nom || 'Inconnu'}
@@ -1603,8 +1686,8 @@ function NouveauControlePage() {
               </div>
             </div>
 
-            <div className="p-4 bg-gray-50 rounded-lg mb-6 text-center">
-              <h3 className="font-medium text-gray-900 mb-3">Taux de conformité calculé</h3>
+            <div className="p-4 bg-papier rounded-lg mb-6 text-center">
+              <h3 className="font-medium text-encre mb-3">Taux de conformité calculé</h3>
               <div className="flex items-center justify-center gap-4">
                 <ConformiteGauge value={tauxCalcule || 0} />
                 <div>
@@ -1700,7 +1783,7 @@ function ControlesPage() {
           <Input label="Taux max (%)" type="number" value={maxTaux} onChange={(e: any) => setMaxTaux(e.target.value)} />
         </div>
         {(search || filterSite || filterStatut || dateFrom || dateTo || minTaux || maxTaux) && (
-          <button onClick={() => { setSearch(''); setFilterSite(''); setFilterStatut(''); setDateFrom(''); setDateTo(''); setMinTaux(''); setMaxTaux(''); }} className="text-sm text-blue-600 hover:underline mt-3">Réinitialiser les filtres</button>
+          <button onClick={() => { setSearch(''); setFilterSite(''); setFilterStatut(''); setDateFrom(''); setDateTo(''); setMinTaux(''); setMaxTaux(''); }} className="text-sm text-encre hover:underline mt-3">Réinitialiser les filtres</button>
         )}
       </Card>
 
@@ -1721,21 +1804,21 @@ function ControlesPage() {
                           {c.statut}
                         </Badge>
                       </div>
-                      <p className="text-sm text-gray-500 mt-1">{site?.nom} - {formatDate(c.date)}</p>
+                      <p className="text-sm text-acier mt-1">{site?.nom} - {formatDate(c.date)}</p>
                       <p className="text-sm mt-1">Agent: {agent ? `${agent.prenom} ${agent.nom}` : 'Inconnu'}</p>
                     </div>
                     <div className="flex items-center gap-2 ml-4">
                       {c.tauxConformite !== null && (
-                        <ConformiteGauge value={c.tauxConformite} threshold={site?.seuilCible || 90} />
+                        <ConformiteGauge value={c.tauxConformite} threshold={site?.seuilCible || SEUIL_DEFAUT} />
                       )}
                     </div>
                   </div>
                   <div className="mt-3 flex gap-3">
-                    <Link to={`/controles/${c.id}`} className="text-sm text-blue-600 hover:underline">
+                    <Link to={`/controles/${c.id}`} className="text-sm text-encre hover:underline">
                       Voir les détails →
                     </Link>
                     {c.statut === 'Brouillon' && (
-                      <Link to={`/controles/nouveau?brouillonId=${c.id}`} className="text-sm text-orange-600 hover:underline font-medium">
+                      <Link to={`/controles/nouveau?brouillonId=${c.id}`} className="text-sm text-note-alerte hover:underline font-medium">
                         ▶ Reprendre la saisie
                       </Link>
                     )}
@@ -1745,8 +1828,8 @@ function ControlesPage() {
             })
         ) : (
           <Card className="text-center py-8">
-            <ClipboardList className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">Aucun contrôle trouvé</p>
+            <ClipboardList className="w-12 h-12 text-acier-clair mx-auto mb-4" />
+            <p className="text-acier">Aucun contrôle trouvé</p>
           </Card>
         )}
       </div>
@@ -1767,8 +1850,8 @@ function ControleDetailPage() {
   if (!controle) {
     return (
       <Card className="text-center py-8">
-        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-        <p className="text-gray-500">Contrôle non trouvé</p>
+        <AlertCircle className="w-12 h-12 text-note-nc mx-auto mb-4" />
+        <p className="text-acier">Contrôle non trouvé</p>
         <Button onClick={() => navigate('/controles')}>Retour aux contrôles</Button>
       </Card>
     );
@@ -1783,12 +1866,12 @@ function ControleDetailPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-4 justify-between flex-wrap">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/controles')} className="p-2 hover:bg-gray-100 rounded-lg">
+          <button onClick={() => navigate('/controles')} className="p-2 hover:bg-papier rounded-lg">
             <ChevronLeft />
           </button>
           <div>
             <h1 className="text-2xl font-bold">Contrôle {controle.type}</h1>
-            <p className="text-gray-500">{formatDate(controle.date)}</p>
+            <p className="text-acier">{formatDate(controle.date)}</p>
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -1844,17 +1927,17 @@ function ControleDetailPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="text-center">
-          <p className="text-sm text-gray-500">Taux de conformité</p>
-          <ConformiteGauge value={controle.tauxConformite || 0} threshold={site?.seuilCible || 90} />
+          <p className="text-sm text-acier">Taux de conformité</p>
+          <ConformiteGauge value={controle.tauxConformite || 0} threshold={site?.seuilCible || SEUIL_DEFAUT} />
         </Card>
         <Card className="text-center">
-          <p className="text-sm text-gray-500">Statut</p>
+          <p className="text-sm text-acier">Statut</p>
           <Badge variant={controle.statut === 'Validé' ? 'success' : controle.statut === 'Terminé' ? 'info' : 'default'}>
             {controle.statut}
           </Badge>
         </Card>
         <Card className="text-center">
-          <p className="text-sm text-gray-500">Actions correctives</p>
+          <p className="text-sm text-acier">Actions correctives</p>
           <p className="text-2xl font-bold">{actions.length}</p>
         </Card>
       </div>
@@ -1862,13 +1945,13 @@ function ControleDetailPage() {
       <Card>
         <h2 className="text-lg font-semibold mb-4">Informations</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <div><p className="text-gray-500">Site</p><p className="font-medium">{site?.nom}</p></div>
-          <div><p className="text-gray-500">Agent évalué</p><p className="font-medium">{agent ? `${agent.prenom} ${agent.nom}` : 'Inconnu'}</p></div>
+          <div><p className="text-acier">Site</p><p className="font-medium">{site?.nom}</p></div>
+          <div><p className="text-acier">Agent évalué</p><p className="font-medium">{agent ? `${agent.prenom} ${agent.nom}` : 'Inconnu'}</p></div>
         </div>
         {controle.commentaireGeneral && (
           <div className="mt-4">
-            <p className="text-sm text-gray-500 mb-2">Commentaire général</p>
-            <p className="p-3 bg-gray-50 rounded-lg">{controle.commentaireGeneral}</p>
+            <p className="text-sm text-acier mb-2">Commentaire général</p>
+            <p className="p-3 bg-papier rounded-lg">{controle.commentaireGeneral}</p>
           </div>
         )}
       </Card>
@@ -1880,10 +1963,10 @@ function ControleDetailPage() {
             const critere = getCritereById(data.criteres, r.critereId);
             const local = getLocalById(data.locaux, r.localId);
             return (
-              <div key={r.id} className="p-2 bg-gray-50 rounded border border-gray-200 flex justify-between items-center">
+              <div key={r.id} className="p-2 bg-papier rounded border border-filet flex justify-between items-center">
                 <div>
                   <p className="text-sm font-medium">{critere?.libelle}</p>
-                  <p className="text-xs text-gray-500">{local?.nom}</p>
+                  <p className="text-xs text-acier">{local?.nom}</p>
                 </div>
                 <NoteButton note={r.note} selected disabled onSelect={() => {}} />
               </div>
@@ -1957,10 +2040,10 @@ function ActionRow({ a }: { a: any }) {
         <div className="flex justify-between items-start gap-4">
           <div className="flex-1">
             <p className="font-medium">{a.descriptionNc}</p>
-            <p className="text-sm text-gray-700">{a.action}</p>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-sm text-encre">{a.action}</p>
+            <p className="text-xs text-acier mt-1">
               {responsable ? `${responsable.prenom} ${responsable.nom}` : 'Inconnu'} · Échéance: {formatDate(a.echeance)}
-              {isOverdue && <span className="text-red-600 font-medium ml-1">(en retard)</span>}
+              {isOverdue && <span className="text-note-nc font-medium ml-1">(en retard)</span>}
             </p>
             <div className="flex gap-2 mt-3">
               {(['Ouverte', 'En cours', 'Soldée'] as const).map(s => (
@@ -1969,22 +2052,22 @@ function ActionRow({ a }: { a: any }) {
                   onClick={() => changeStatut(s)}
                   className={`px-2.5 py-1 text-xs font-medium rounded-full border ${
                     a.statut === s
-                      ? (s === 'Soldée' ? 'bg-green-100 text-green-800 border-green-300' : s === 'En cours' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' : 'bg-red-100 text-red-800 border-red-300')
-                      : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'
+                      ? (s === 'Soldée' ? 'bg-note-conforme/10 text-note-conforme border-note-conforme/30' : s === 'En cours' ? 'bg-note-partiel/10 text-note-partiel border-note-partiel/30' : 'bg-note-nc/10 text-note-nc border-note-nc/30')
+                      : 'bg-white text-acier border-filet hover:bg-papier'
                   }`}
                 >{s}</button>
               ))}
             </div>
           </div>
           <div className="flex flex-col gap-1 text-sm">
-            <button onClick={() => setEditing(true)} className="text-blue-600 hover:underline">Modifier</button>
+            <button onClick={() => setEditing(true)} className="text-encre hover:underline">Modifier</button>
             {responsable?.email && (
               <a
                 href={`mailto:${responsable.email}?subject=${encodeURIComponent('Action corrective à traiter')}&body=${encodeURIComponent(`Bonjour ${responsable.prenom},\n\nUne action corrective t'a été assignée :\n\n${a.descriptionNc}\nAction à réaliser : ${a.action}\nÉchéance : ${a.echeance}\n\nMerci.`)}`}
-                className="text-blue-600 hover:underline"
+                className="text-encre hover:underline"
               >Notifier</a>
             )}
-            <button onClick={() => confirm('Supprimer cette action ?') && removeRow('actions', a.id)} className="text-red-600 hover:underline">Suppr.</button>
+            <button onClick={() => confirm('Supprimer cette action ?') && removeRow('actions', a.id)} className="text-note-nc hover:underline">Suppr.</button>
           </div>
         </div>
       )}
@@ -2022,11 +2105,11 @@ function ActionsPage() {
       <h1 className="text-2xl font-bold">Actions correctives</h1>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <Card className="text-center !p-3"><p className="text-xs text-gray-500">Total</p><p className="text-xl font-bold">{counts.total}</p></Card>
-        <Card className="text-center !p-3"><p className="text-xs text-gray-500">Ouvertes</p><p className="text-xl font-bold text-red-600">{counts.ouvertes}</p></Card>
-        <Card className="text-center !p-3"><p className="text-xs text-gray-500">En cours</p><p className="text-xl font-bold text-yellow-600">{counts.encours}</p></Card>
-        <Card className="text-center !p-3"><p className="text-xs text-gray-500">Soldées</p><p className="text-xl font-bold text-green-600">{counts.soldees}</p></Card>
-        <Card className="text-center !p-3"><p className="text-xs text-gray-500">En retard</p><p className="text-xl font-bold text-red-600">{counts.retard}</p></Card>
+        <Card className="text-center !p-3"><p className="text-xs text-acier">Total</p><p className="text-xl font-bold">{counts.total}</p></Card>
+        <Card className="text-center !p-3"><p className="text-xs text-acier">Ouvertes</p><p className="text-xl font-bold text-note-nc">{counts.ouvertes}</p></Card>
+        <Card className="text-center !p-3"><p className="text-xs text-acier">En cours</p><p className="text-xl font-bold text-note-partiel">{counts.encours}</p></Card>
+        <Card className="text-center !p-3"><p className="text-xs text-acier">Soldées</p><p className="text-xl font-bold text-note-conforme">{counts.soldees}</p></Card>
+        <Card className="text-center !p-3"><p className="text-xs text-acier">En retard</p><p className="text-xl font-bold text-note-nc">{counts.retard}</p></Card>
       </div>
 
       <Card>
@@ -2052,7 +2135,7 @@ function ActionsPage() {
       <div className="space-y-3">
         {filtered.length > 0
           ? filtered.map((a: any) => <ActionRow key={a.id} a={a} />)
-          : <Card className="text-center py-8"><AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" /><p className="text-gray-500">Aucune action</p></Card>
+          : <Card className="text-center py-8"><AlertCircle className="w-12 h-12 text-acier-clair mx-auto mb-4" /><p className="text-acier">Aucune action</p></Card>
         }
       </div>
     </div>
@@ -2078,23 +2161,23 @@ function SitesPage() {
         {data.sites.map((site: any) => (
           <Card key={site.id}>
             <div className="flex gap-4">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Building2 className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 bg-encre/10 rounded-lg flex items-center justify-center">
+                <Building2 className="w-6 h-6 text-encre" />
               </div>
               <div className="flex-1">
                 <h3 className="font-semibold">{site.nom}</h3>
-                <p className="text-sm text-gray-500">{site.ville} - {site.client}</p>
+                <p className="text-sm text-acier">{site.ville} - {site.client}</p>
                 <Badge variant="info">{site.frequenceControle}</Badge>
               </div>
             </div>
             <div className="mt-3">
-              <Link to={`/sites/${site.id}`} className="text-sm text-blue-600 hover:underline">Voir les détails →</Link>
+              <Link to={`/sites/${site.id}`} className="text-sm text-encre hover:underline">Voir les détails →</Link>
             </div>
           </Card>
         ))}
         {data.sites.length === 0 && (
           <Card className="text-center py-8 md:col-span-2">
-            <p className="text-gray-500">Aucun site. Crée le premier.</p>
+            <p className="text-acier">Aucun site. Crée le premier.</p>
           </Card>
         )}
       </div>
@@ -2157,13 +2240,13 @@ function SitesImportPage() {
   return (
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-center gap-4">
-        <button onClick={() => navigate('/sites')} className="p-2 hover:bg-gray-100 rounded-lg"><ChevronLeft /></button>
+        <button onClick={() => navigate('/sites')} className="p-2 hover:bg-papier rounded-lg"><ChevronLeft /></button>
         <h1 className="text-2xl font-bold">Importer un fichier Excel</h1>
       </div>
 
       <Card>
         <h2 className="text-lg font-semibold mb-2">1. Télécharger le modèle</h2>
-        <p className="text-sm text-gray-500 mb-4">
+        <p className="text-sm text-acier mb-4">
           Le fichier contient 2 feuilles : <strong>Sites</strong> (1 ligne par site) et <strong>Locaux</strong> (référence le site par son nom).
         </p>
         <Button variant="secondary" onClick={downloadTemplateSites}>📥 Télécharger le modèle</Button>
@@ -2175,16 +2258,16 @@ function SitesImportPage() {
           type="file"
           accept=".xlsx,.xls,.csv"
           onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}
-          className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+          className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-encre file:text-white hover:file:bg-encre-fonce"
         />
       </Card>
 
       {preview && (
         <>
           {preview.errors.length > 0 && (
-            <Card className="border-l-4 border-l-orange-500 bg-orange-50">
-              <h3 className="font-semibold text-orange-900 mb-2">Avertissements</h3>
-              <ul className="text-sm text-orange-800 list-disc pl-5">
+            <Card className="border-l-4 border-l-orange-500 bg-note-alerte/10">
+              <h3 className="font-semibold text-note-alerte mb-2">Avertissements</h3>
+              <ul className="text-sm text-note-alerte list-disc pl-5">
                 {preview.errors.map((e, i) => <li key={i}>{e}</li>)}
               </ul>
             </Card>
@@ -2193,11 +2276,11 @@ function SitesImportPage() {
           <Card>
             <h2 className="text-lg font-semibold mb-3">Aperçu — Sites ({preview.sites.length})</h2>
             {preview.sites.length === 0 ? (
-              <p className="text-sm text-gray-500">Aucun site dans le fichier.</p>
+              <p className="text-sm text-acier">Aucun site dans le fichier.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-papier">
                     <tr>
                       <th className="text-left p-2">Nom</th>
                       <th className="text-left p-2">Client</th>
@@ -2229,7 +2312,7 @@ function SitesImportPage() {
               <h2 className="text-lg font-semibold mb-3">Aperçu — Locaux ({preview.locaux.length})</h2>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-papier">
                     <tr>
                       <th className="text-left p-2">Site</th>
                       <th className="text-left p-2">Nom</th>
@@ -2272,7 +2355,7 @@ function SiteFormPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const existing = id ? getSiteById(data.sites, id) : null;
-  if (!isAdminOrManager) return <Card className="text-center py-8"><p className="text-gray-500">Vous n'avez pas les droits pour modifier les sites.</p></Card>;
+  if (!isAdminOrManager) return <Card className="text-center py-8"><p className="text-acier">Vous n'avez pas les droits pour modifier les sites.</p></Card>;
   const [form, setForm] = useState<any>(existing || {
     id: generateId(),
     nom: '',
@@ -2326,13 +2409,13 @@ function SiteFormPage() {
   return (
     <div className="space-y-6 max-w-2xl">
       <div className="flex items-center gap-4">
-        <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-lg"><ChevronLeft /></button>
+        <button onClick={() => navigate(-1)} className="p-2 hover:bg-papier rounded-lg"><ChevronLeft /></button>
         <h1 className="text-2xl font-bold">{existing ? 'Modifier le site' : 'Nouveau site'}</h1>
       </div>
       {!existing && data.templates.length > 0 && (
-        <Card className="bg-blue-50 border-blue-200">
+        <Card className="bg-encre/5 border-encre/20">
           <h3 className="font-medium mb-2">🚀 Démarrer depuis un template</h3>
-          <p className="text-sm text-gray-600 mb-3">Crée le site avec ses locaux et agents pré-remplis.</p>
+          <p className="text-sm text-acier mb-3">Crée le site avec ses locaux et agents pré-remplis.</p>
           <Select
             label=""
             value={selectedTpl}
@@ -2412,7 +2495,7 @@ function SiteDetailPage() {
   if (!site) {
     return (
       <Card className="text-center py-8">
-        <p className="text-gray-500">Site non trouvé</p>
+        <p className="text-acier">Site non trouvé</p>
         <Button onClick={() => navigate('/sites')}>Retour</Button>
       </Card>
     );
@@ -2444,18 +2527,18 @@ function SiteDetailPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-4 justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/sites')} className="p-2 hover:bg-gray-100 rounded-lg">
+          <button onClick={() => navigate('/sites')} className="p-2 hover:bg-papier rounded-lg">
             <ChevronLeft />
           </button>
           <div>
             <h1 className="text-2xl font-bold">{site.nom}</h1>
-            <p className="text-gray-500">{site.ville} - {site.client}</p>
+            <p className="text-acier">{site.ville} - {site.client}</p>
           </div>
         </div>
         {canEdit && (
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => navigate(`/sites/${site.id}/edit`)}>Modifier</Button>
-            <Button variant="outline" onClick={handleDeleteSite} className="text-red-600 border-red-300">Supprimer</Button>
+            <Button variant="outline" onClick={handleDeleteSite} className="text-note-nc border-note-nc/30">Supprimer</Button>
           </div>
         )}
       </div>
@@ -2463,17 +2546,17 @@ function SiteDetailPage() {
       {canEdit && (
         <Card>
           <h2 className="text-lg font-semibold mb-2">Accès client en lecture</h2>
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="text-sm text-acier mb-4">
             Les emails listés pourront se connecter (avec un compte qu'ils créeront eux-mêmes) et consulter <strong>uniquement</strong> ce site et ses contrôles, sans rien modifier.
           </p>
           <div className="space-y-2 mb-4">
             {viewers.map(v => (
-              <div key={v.email} className="p-2 bg-gray-50 rounded border border-gray-200 flex justify-between items-center">
+              <div key={v.email} className="p-2 bg-papier rounded border border-filet flex justify-between items-center">
                 <span className="text-sm">{v.email}</span>
-                <button onClick={() => removeViewer(v.email)} className="text-red-600 text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-red-50">Retirer</button>
+                <button onClick={() => removeViewer(v.email)} className="text-note-nc text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-note-nc/5">Retirer</button>
               </div>
             ))}
-            {viewers.length === 0 && <p className="text-sm text-gray-400">Aucun accès partagé</p>}
+            {viewers.length === 0 && <p className="text-sm text-acier-clair">Aucun accès partagé</p>}
           </div>
           <div className="flex gap-2 items-end">
             <Input label="Email du client" type="email" value={newViewer} onChange={(e: any) => setNewViewer(e.target.value)} placeholder="client@entreprise.com" />
@@ -2509,12 +2592,12 @@ function SiteDetailPage() {
         </div>
         <div className="space-y-2 mb-4">
           {locaux.map((local: any) => (
-            <div key={local.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200 flex justify-between items-center">
+            <div key={local.id} className="p-3 bg-papier rounded-lg border border-filet flex justify-between items-center">
               <div>
                 <p className="font-medium">{local.nom}</p>
-                <p className="text-sm text-gray-500">{local.type} - {local.surface}m² - {local.etage}</p>
+                <p className="text-sm text-acier">{local.type} - {local.surface}m² - {local.etage}</p>
               </div>
-              {canEdit && <button onClick={() => removeRow('locaux', local.id)} className="text-red-600 text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-red-50">Suppr.</button>}
+              {canEdit && <button onClick={() => removeRow('locaux', local.id)} className="text-note-nc text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-note-nc/5">Suppr.</button>}
             </div>
           ))}
         </div>
@@ -2547,12 +2630,12 @@ function SiteDetailPage() {
           <h2 className="text-lg font-semibold mb-4">Agents ({agents.length})</h2>
           <div className="space-y-2 mb-4">
             {agents.map((a: any) => (
-              <div key={a.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200 flex justify-between items-center">
+              <div key={a.id} className="p-3 bg-papier rounded-lg border border-filet flex justify-between items-center">
                 <div>
                   <p className="font-medium">{a.prenom} {a.nom}</p>
-                  {a.email && <p className="text-xs text-gray-500">{a.email}</p>}
+                  {a.email && <p className="text-xs text-acier">{a.email}</p>}
                 </div>
-                <button onClick={() => removeRow('agents', a.id)} className="text-red-600 text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-red-50">Suppr.</button>
+                <button onClick={() => removeRow('agents', a.id)} className="text-note-nc text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-note-nc/5">Suppr.</button>
               </div>
             ))}
           </div>
@@ -2570,7 +2653,7 @@ function SiteDetailPage() {
       {controles.length > 0 && (
         <Card>
           <h2 className="text-lg font-semibold mb-2">Rapport mensuel</h2>
-          <p className="text-sm text-gray-500 mb-3">Synthèse PDF de tous les contrôles du mois pour ce site.</p>
+          <p className="text-sm text-acier mb-3">Synthèse PDF de tous les contrôles du mois pour ce site.</p>
           <RapportMensuelButton site={site} controles={controles} />
         </Card>
       )}
@@ -2597,7 +2680,7 @@ function SiteDetailPage() {
         <h2 className="text-lg font-semibold mb-4">Contrôles ({controles.length})</h2>
         <div className="space-y-2">
           {controles.map((c: any) => (
-            <Link key={c.id} to={`/controles/${c.id}`} className="block p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300">
+            <Link key={c.id} to={`/controles/${c.id}`} className="block p-3 bg-papier rounded-lg border border-filet hover:border-ciel">
               <p className="font-medium">{c.type} - {formatDate(c.date)}{c.tauxConformite !== null ? ` · ${c.tauxConformite}%` : ''}</p>
             </Link>
           ))}
@@ -2635,11 +2718,11 @@ function RapportMensuelButton({ site, controles }: { site: any; controles: any[]
 // --- Critères ---
 function CriteresPage() {
   const { data, saveRow, removeRow, isAdminOrManager } = useApp();
-  if (!isAdminOrManager) return <Card className="text-center py-8"><p className="text-gray-500">Vous n'avez pas les droits pour gérer les critères.</p></Card>;
+  if (!isAdminOrManager) return <Card className="text-center py-8"><p className="text-acier">Vous n'avez pas les droits pour gérer les critères.</p></Card>;
   const [form, setForm] = useState<any>({ libelle: '', categorie: '', coefficient: 2, typeLocal: [] });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
-  const TYPES = ['Bureau', 'Sanitaire', 'Circulation', 'Vestiaire', 'Cuisine/Office'];
+  const TYPES = ACTIVE_CONFIG.typesZone.map(t => t.cle); // etait duplique de TYPES_LOCAUX
 
   const importPack = async (packKey: string) => {
     const pack = PACKS[packKey];
@@ -2688,10 +2771,10 @@ function CriteresPage() {
         <h2 className="text-lg font-semibold mb-2">Bibliothèque standard</h2>
         <div className="space-y-3">
           {Object.entries(PACKS).map(([key, pack]) => (
-            <div key={key} className="flex items-center justify-between gap-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div key={key} className="flex items-center justify-between gap-4 p-3 bg-encre/5 border border-encre/20 rounded-lg">
               <div>
                 <p className="font-medium">{pack.label}</p>
-                <p className="text-sm text-gray-600">{pack.description}</p>
+                <p className="text-sm text-acier">{pack.description}</p>
               </div>
               <Button onClick={() => importPack(key)} disabled={importing}>
                 {importing ? '...' : 'Importer'}
@@ -2714,13 +2797,13 @@ function CriteresPage() {
           />
         </div>
         <div className="mt-4">
-          <p className="text-sm font-medium text-gray-700 mb-2">S'applique aux locaux :</p>
+          <p className="text-sm font-medium text-encre mb-2">S'applique aux locaux :</p>
           <div className="flex flex-wrap gap-2">
             {TYPES.map(t => (
               <button
                 key={t}
                 onClick={() => toggleType(t)}
-                className={`px-3 py-1 text-sm rounded-full border ${form.typeLocal.includes(t) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
+                className={`px-3 py-1 text-sm rounded-full border ${form.typeLocal.includes(t) ? 'bg-encre text-white border-encre' : 'bg-white text-encre border-filet'}`}
               >{t}</button>
             ))}
           </div>
@@ -2735,14 +2818,14 @@ function CriteresPage() {
         <h2 className="text-lg font-semibold mb-4">Liste ({data.criteres.length})</h2>
         <div className="space-y-2">
           {data.criteres.map((c: any) => (
-            <div key={c.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200 flex justify-between items-center">
+            <div key={c.id} className="p-3 bg-papier rounded-lg border border-filet flex justify-between items-center">
               <div className="flex-1">
                 <p className="font-medium">{c.libelle}</p>
-                <p className="text-xs text-gray-500">{c.categorie} · coef {c.coefficient} · {(c.typeLocal || []).join(', ')}</p>
+                <p className="text-xs text-acier">{c.categorie} · coef {c.coefficient} · {(c.typeLocal || []).join(', ')}</p>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => handleEdit(c)} className="text-blue-600 text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-blue-50">Modifier</button>
-                <button onClick={() => removeRow('criteres', c.id)} className="text-red-600 text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-red-50">Suppr.</button>
+                <button onClick={() => handleEdit(c)} className="text-encre text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-encre/5">Modifier</button>
+                <button onClick={() => removeRow('criteres', c.id)} className="text-note-nc text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-note-nc/5">Suppr.</button>
               </div>
             </div>
           ))}
@@ -2780,7 +2863,7 @@ function CommentairesTypesPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Commentaires types</h1>
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-acier">
         Modèles de commentaires réutilisables lors de la saisie d'un contrôle. Vos contrôleurs cliqueront dessus au lieu de tout retaper.
       </p>
 
@@ -2794,10 +2877,7 @@ function CommentairesTypesPage() {
             onChange={(e: any) => setForm({ ...form, note: e.target.value })}
             options={[
               { value: '', label: 'Toutes les notes' },
-              { value: 'Conforme', label: 'Conforme' },
-              { value: 'Partiellement conforme', label: 'Partiellement conforme' },
-              { value: 'Non conforme', label: 'Non conforme' },
-              { value: 'Non applicable', label: 'Non applicable' },
+              ...ACTIVE_CONFIG.notes.map(n => ({ value: n.cle, label: n.libelle })),
             ]}
           />
           <Input label="Catégorie (optionnel)" value={form.categorie} onChange={(e: any) => setForm({ ...form, categorie: e.target.value })} placeholder="ex: Sols, Sanitaires" />
@@ -2816,18 +2896,18 @@ function CommentairesTypesPage() {
             <Card key={n || 'all'}>
               <h3 className="font-semibold mb-3">
                 {n || 'Universels (toutes notes)'}
-                <span className="text-sm text-gray-500 ml-2">({items.length})</span>
+                <span className="text-sm text-acier ml-2">({items.length})</span>
               </h3>
               <div className="space-y-2">
                 {items.map((c: any) => (
-                  <div key={c.id} className="p-2 bg-gray-50 rounded border border-gray-200 flex justify-between items-center">
+                  <div key={c.id} className="p-2 bg-papier rounded border border-filet flex justify-between items-center">
                     <div>
                       <p className="text-sm">{c.libelle}</p>
-                      {c.categorie && <p className="text-xs text-gray-500">{c.categorie}</p>}
+                      {c.categorie && <p className="text-xs text-acier">{c.categorie}</p>}
                     </div>
                     <div className="flex gap-2 text-sm">
-                      <button onClick={() => edit(c)} className="text-blue-600 hover:underline">Modifier</button>
-                      <button onClick={() => confirm('Supprimer ?') && removeRow('commentaires_types', c.id)} className="text-red-600 hover:underline">Suppr.</button>
+                      <button onClick={() => edit(c)} className="text-encre hover:underline">Modifier</button>
+                      <button onClick={() => confirm('Supprimer ?') && removeRow('commentaires_types', c.id)} className="text-note-nc hover:underline">Suppr.</button>
                     </div>
                   </div>
                 ))}
@@ -2837,7 +2917,7 @@ function CommentairesTypesPage() {
         })}
         {data.commentairesTypes.length === 0 && (
           <Card className="text-center py-8">
-            <p className="text-gray-500">Aucun modèle. Créez-en pour faire gagner du temps à vos contrôleurs.</p>
+            <p className="text-acier">Aucun modèle. Créez-en pour faire gagner du temps à vos contrôleurs.</p>
           </Card>
         )}
       </div>
@@ -2846,7 +2926,7 @@ function CommentairesTypesPage() {
 }
 
 // --- Templates ---
-const TYPES_LOCAUX = ['Bureau', 'Sanitaire', 'Circulation', 'Vestiaire', 'Cuisine/Office'];
+const TYPES_LOCAUX = ACTIVE_CONFIG.typesZone.map(t => t.cle);
 
 function TemplatesPage() {
   const { data, saveRow, removeRow, isAdminOrManager } = useApp();
@@ -2887,27 +2967,27 @@ function TemplatesPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold">Templates de site</h1>
-          <p className="text-sm text-gray-500">Modèles de locaux à appliquer en 1 clic sur un nouveau site.</p>
+          <p className="text-sm text-acier">Modèles de locaux à appliquer en 1 clic sur un nouveau site.</p>
         </div>
         <Button onClick={openNew}>+ Nouveau template</Button>
       </div>
 
       <div className="space-y-3">
         {data.templates.length === 0 ? (
-          <Card className="text-center py-8"><p className="text-gray-500">Aucun template. Crée le premier.</p></Card>
+          <Card className="text-center py-8"><p className="text-acier">Aucun template. Crée le premier.</p></Card>
         ) : data.templates.map((t: any) => (
           <Card key={t.id}>
             <div className="flex justify-between items-start gap-4">
               <div className="flex-1">
                 <h3 className="font-semibold">{t.nom}</h3>
-                {t.description && <p className="text-sm text-gray-500">{t.description}</p>}
-                <p className="text-xs text-gray-400 mt-1">
+                {t.description && <p className="text-sm text-acier">{t.description}</p>}
+                <p className="text-xs text-acier-clair mt-1">
                   {(t.locaux || []).length} local(aux) · {(t.agents || []).length} agent(s) · {t.frequenceControle || 'Hebdo'} · seuil {t.seuilCible || 90}%
                 </p>
               </div>
               <div className="flex gap-2 text-sm">
-                <button onClick={() => openEdit(t)} className="text-blue-600 hover:underline">Modifier</button>
-                <button onClick={() => confirm(`Supprimer "${t.nom}" ?`) && removeRow('templates', t.id)} className="text-red-600 hover:underline">Suppr.</button>
+                <button onClick={() => openEdit(t)} className="text-encre hover:underline">Modifier</button>
+                <button onClick={() => confirm(`Supprimer "${t.nom}" ?`) && removeRow('templates', t.id)} className="text-note-nc hover:underline">Suppr.</button>
               </div>
             </div>
           </Card>
@@ -2933,26 +3013,26 @@ function TemplatesPage() {
             <h3 className="font-medium mb-2">Locaux ({form.locaux.length})</h3>
             <div className="space-y-2 mb-2">
               {form.locaux.map((l: any, i: number) => (
-                <div key={i} className="grid grid-cols-1 md:grid-cols-5 gap-2 items-end p-2 bg-gray-50 rounded">
+                <div key={i} className="grid grid-cols-1 md:grid-cols-5 gap-2 items-end p-2 bg-papier rounded">
                   <Input label="Nom" value={l.nom} onChange={(e: any) => updateLocal(i, { nom: e.target.value })} />
                   <Select label="Type" value={l.type} onChange={(e: any) => updateLocal(i, { type: e.target.value })} options={TYPES_LOCAUX.map(t => ({ value: t, label: t }))} />
                   <Input label="Surface" type="number" value={l.surface} onChange={(e: any) => updateLocal(i, { surface: parseInt(e.target.value) || 0 })} />
                   <Input label="Étage" value={l.etage} onChange={(e: any) => updateLocal(i, { etage: e.target.value })} />
-                  <button onClick={() => removeLocal(i)} className="text-red-600 text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-red-50">Supprimer</button>
+                  <button onClick={() => removeLocal(i)} className="text-note-nc text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-note-nc/5">Supprimer</button>
                 </div>
               ))}
             </div>
             <Button variant="secondary" onClick={addLocal}>+ Ajouter un local</Button>
 
             <h3 className="font-medium mb-2 mt-6">Agents ({form.agents.length})</h3>
-            <p className="text-xs text-gray-500 mb-2">Agents pré-créés sur le site lorsque le template est appliqué (utile pour onboarding rapide).</p>
+            <p className="text-xs text-acier mb-2">Agents pré-créés sur le site lorsque le template est appliqué (utile pour onboarding rapide).</p>
             <div className="space-y-2 mb-2">
               {form.agents.map((a: any, i: number) => (
-                <div key={i} className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end p-2 bg-gray-50 rounded">
+                <div key={i} className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end p-2 bg-papier rounded">
                   <Input label="Prénom" value={a.prenom} onChange={(e: any) => updateAgent(i, { prenom: e.target.value })} />
                   <Input label="Nom" value={a.nom} onChange={(e: any) => updateAgent(i, { nom: e.target.value })} />
                   <Input label="Email" type="email" value={a.email || ''} onChange={(e: any) => updateAgent(i, { email: e.target.value })} />
-                  <button onClick={() => removeAgent(i)} className="text-red-600 text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-red-50">Supprimer</button>
+                  <button onClick={() => removeAgent(i)} className="text-note-nc text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-note-nc/5">Supprimer</button>
                 </div>
               ))}
             </div>
@@ -3058,14 +3138,14 @@ function OrganisationPage() {
           <Input label="Nom de l'organisation" value={orgName} onChange={(e: any) => setOrgName(e.target.value)} disabled={!isAdmin} />
           {isAdmin && <Button onClick={renameOrg} disabled={!orgName.trim() || orgName === org?.name}>Renommer</Button>}
         </div>
-        <p className="text-xs text-gray-500 mt-2">Mon rôle : <strong>{role}</strong></p>
+        <p className="text-xs text-acier mt-2">Mon rôle : <strong>{role}</strong></p>
       </Card>
 
       <Card>
         <h2 className="text-lg font-semibold mb-4">Membres ({members.length})</h2>
         <div className="space-y-2">
           {members.map((m: any) => (
-            <div key={m.user_id} className="p-3 bg-gray-50 rounded border border-gray-200 flex justify-between items-center flex-wrap gap-2">
+            <div key={m.user_id} className="p-3 bg-papier rounded border border-filet flex justify-between items-center flex-wrap gap-2">
               <p className="font-mono text-xs">{m.user_id}</p>
               <div className="flex gap-2 items-center">
                 {isAdmin ? (
@@ -3075,7 +3155,7 @@ function OrganisationPage() {
                     <option value="controleur">Contrôleur</option>
                   </select>
                 ) : <Badge variant="info">{m.role}</Badge>}
-                {isAdmin && <button onClick={() => removeMember(m.user_id)} className="text-red-600 text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-red-50">Retirer</button>}
+                {isAdmin && <button onClick={() => removeMember(m.user_id)} className="text-note-nc text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-note-nc/5">Retirer</button>}
               </div>
             </div>
           ))}
@@ -3085,7 +3165,7 @@ function OrganisationPage() {
       {isAdmin && (
         <Card>
           <h2 className="text-lg font-semibold mb-2">Inviter un membre</h2>
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="text-sm text-acier mb-4">
             L'invité crée un compte Supabase avec son email — à sa première connexion il rejoint automatiquement votre organisation.
           </p>
           <div className="flex gap-2 items-end flex-wrap">
@@ -3100,12 +3180,12 @@ function OrganisationPage() {
           </div>
           {invitations.length > 0 && (
             <div className="mt-4">
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Invitations en attente</h3>
+              <h3 className="text-sm font-medium text-encre mb-2">Invitations en attente</h3>
               <div className="space-y-1">
                 {invitations.map((i: any) => (
-                  <div key={i.email} className="text-sm flex justify-between p-2 bg-yellow-50 rounded">
+                  <div key={i.email} className="text-sm flex justify-between p-2 bg-note-partiel/10 rounded">
                     <span>{i.email} · {i.role}</span>
-                    <button onClick={() => cancelInvite(i.email)} className="text-red-600 hover:underline">Annuler</button>
+                    <button onClick={() => cancelInvite(i.email)} className="text-note-nc hover:underline">Annuler</button>
                   </div>
                 ))}
               </div>
@@ -3116,7 +3196,7 @@ function OrganisationPage() {
 
       <Card>
         <h2 className="text-lg font-semibold mb-2">Rôles</h2>
-        <ul className="text-sm text-gray-600 space-y-1">
+        <ul className="text-sm text-acier space-y-1">
           <li><strong>Admin</strong> — gère l'organisation, invite/retire des membres, change les rôles. Accès complet.</li>
           <li><strong>Manager</strong> — valide les contrôles soumis pour approbation. Accès complet sauf gestion d'organisation.</li>
           <li><strong>Contrôleur</strong> — crée et saisit les contrôles. Soumet pour validation au manager.</li>
@@ -3140,10 +3220,10 @@ function AnalytiquePage() {
   const taux12 = (siteId: string) => tauxMoyenPeriode(data.controles.filter((c: any) => c.siteId === siteId), 12);
 
   const colorTaux = (v: number | null) => {
-    if (v === null) return 'bg-gray-100 text-gray-400';
-    if (v >= 90) return 'bg-green-100 text-green-800';
-    if (v >= 75) return 'bg-yellow-100 text-yellow-800';
-    return 'bg-red-100 text-red-800';
+    if (v === null) return 'bg-papier text-acier-clair';
+    if (v >= 90) return 'bg-note-conforme/10 text-note-conforme';
+    if (v >= 75) return 'bg-note-partiel/10 text-note-partiel';
+    return 'bg-note-nc/10 text-note-nc';
   };
 
   return (
@@ -3155,15 +3235,15 @@ function AnalytiquePage() {
             <button
               key={p}
               onClick={() => setPeriod(p as any)}
-              className={`px-3 py-1.5 rounded-lg text-sm border ${period === p ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
+              className={`px-3 py-1.5 rounded-lg text-sm border ${period === p ? 'bg-encre text-white border-encre' : 'bg-white text-encre border-filet'}`}
             >{p} mois</button>
           ))}
         </div>
       </div>
 
       {declin.length > 0 && (
-        <Card className="border-l-4 border-l-orange-500 bg-orange-50">
-          <h2 className="text-lg font-semibold text-orange-900 mb-3">⚠️ Sites en déclin ({declin.length})</h2>
+        <Card className="border-l-4 border-l-orange-500 bg-note-alerte/10">
+          <h2 className="text-lg font-semibold text-note-alerte mb-3">⚠️ Sites en déclin ({declin.length})</h2>
           <div className="space-y-1 text-sm">
             {declin.map(d => (
               <p key={d.site.id}><strong>{d.site.nom}</strong> — baisse de {Math.abs(d.delta)} pts sur 3 mois</p>
@@ -3175,7 +3255,7 @@ function AnalytiquePage() {
       <Card>
         <h2 className="text-lg font-semibold mb-4">Vue comparative — Heatmap mensuelle</h2>
         {data.sites.length === 0 ? (
-          <p className="text-sm text-gray-500">Aucun site.</p>
+          <p className="text-sm text-acier">Aucun site.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -3212,15 +3292,15 @@ function AnalytiquePage() {
         <Card>
           <h2 className="text-lg font-semibold mb-4">Top critères en échec</h2>
           {topKo.length === 0 ? (
-            <p className="text-sm text-gray-500">Pas assez de données.</p>
+            <p className="text-sm text-acier">Pas assez de données.</p>
           ) : (
             <div className="space-y-2">
               {topKo.map((c, i) => (
                 <div key={i} className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-gray-500 w-5">#{i + 1}</span>
+                  <span className="text-xs font-bold text-acier w-5">#{i + 1}</span>
                   <div className="flex-1">
                     <p className="text-sm font-medium">{c.libelle}</p>
-                    <p className="text-xs text-gray-500">{c.categorie} · {c.ko} échecs / {c.total} évaluations</p>
+                    <p className="text-xs text-acier">{c.categorie} · {c.ko} échecs / {c.total} évaluations</p>
                   </div>
                   <span className={`px-2 py-1 rounded font-bold text-sm ${colorTaux(100 - c.tauxEchec)}`}>{c.tauxEchec}%</span>
                 </div>
@@ -3232,15 +3312,15 @@ function AnalytiquePage() {
         <Card>
           <h2 className="text-lg font-semibold mb-4">Ranking agents ({period} mois)</h2>
           {ranking.length === 0 ? (
-            <p className="text-sm text-gray-500">Pas de données sur la période.</p>
+            <p className="text-sm text-acier">Pas de données sur la période.</p>
           ) : (
             <div className="space-y-2">
               {ranking.map((r, i) => (
-                <div key={r.agent.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded">
-                  <span className="text-xs font-bold text-gray-500 w-5">#{i + 1}</span>
+                <div key={r.agent.id} className="flex items-center gap-3 p-2 bg-papier rounded">
+                  <span className="text-xs font-bold text-acier w-5">#{i + 1}</span>
                   <div className="flex-1">
                     <p className="text-sm font-medium">{r.agent.prenom} {r.agent.nom}</p>
-                    <p className="text-xs text-gray-500">{r.nbControles} contrôle{r.nbControles > 1 ? 's' : ''}</p>
+                    <p className="text-xs text-acier">{r.nbControles} contrôle{r.nbControles > 1 ? 's' : ''}</p>
                   </div>
                   <span className={`px-2 py-1 rounded font-bold text-sm ${colorTaux(r.tauxMoyen)}`}>{r.tauxMoyen}%</span>
                 </div>
@@ -3378,7 +3458,7 @@ function PlanningPage() {
 
       <Card>
         <h2 className="text-lg font-semibold mb-2">Planification récurrente</h2>
-        <p className="text-sm text-gray-500 mb-4">Génère plusieurs contrôles planifiés d'un coup selon une fréquence.</p>
+        <p className="text-sm text-acier mb-4">Génère plusieurs contrôles planifiés d'un coup selon une fréquence.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <Select
             label="Site"
@@ -3417,7 +3497,7 @@ function PlanningPage() {
           </div>
         </div>
         {recPreview.length > 0 && (
-          <p className="text-xs text-gray-500 mt-3">
+          <p className="text-xs text-acier mt-3">
             Aperçu : du <strong>{recPreview[0]}</strong> au <strong>{recPreview[recPreview.length - 1]}</strong>
           </p>
         )}
@@ -3425,11 +3505,11 @@ function PlanningPage() {
 
       <Card>
         <div className="flex items-center justify-between mb-4">
-          <button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))} className="p-2 hover:bg-gray-100 rounded"><ChevronLeft /></button>
+          <button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))} className="p-2 hover:bg-papier rounded"><ChevronLeft /></button>
           <h2 className="text-lg font-semibold capitalize">{monthLabel}</h2>
-          <button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))} className="p-2 hover:bg-gray-100 rounded">→</button>
+          <button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))} className="p-2 hover:bg-papier rounded">→</button>
         </div>
-        <div className="grid grid-cols-7 gap-1 text-xs text-gray-500 mb-1">
+        <div className="grid grid-cols-7 gap-1 text-xs text-acier mb-1">
           {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(d => <div key={d} className="text-center font-medium py-1">{d}</div>)}
         </div>
         <div className="grid grid-cols-7 gap-1">
@@ -3440,15 +3520,15 @@ function PlanningPage() {
             const isToday = key === today;
             const isPast = key < today;
             return (
-              <div key={i} className={`min-h-20 border rounded p-1 ${isToday ? 'border-blue-500 bg-blue-50' : 'border-gray-200'} ${isPast && items.length ? 'bg-red-50' : ''}`}>
-                <p className="text-xs text-gray-500">{d.getDate()}</p>
+              <div key={i} className={`min-h-20 border rounded p-1 ${isToday ? 'border-ciel bg-encre/5' : 'border-filet'} ${isPast && items.length ? 'bg-note-nc/10' : ''}`}>
+                <p className="text-xs text-acier">{d.getDate()}</p>
                 {items.map(c => {
                   const site = getSiteById(data.sites, c.siteId);
                   return (
                     <button
                       key={c.id}
                       onClick={() => startControle(c)}
-                      className="block w-full text-left mt-1 px-1 py-0.5 bg-blue-600 text-white text-xs rounded truncate hover:bg-blue-700"
+                      className="block w-full text-left mt-1 px-1 py-0.5 bg-encre text-white text-xs rounded truncate hover:bg-encre-fonce"
                       title={`${site?.nom} - ${c.type}`}
                     >
                       {site?.nom}
@@ -3468,21 +3548,21 @@ function PlanningPage() {
             const site = getSiteById(data.sites, c.siteId);
             const isPast = c.datePrevue < today;
             return (
-              <div key={c.id} className={`p-3 rounded-lg border flex justify-between items-center ${isPast ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'}`}>
+              <div key={c.id} className={`p-3 rounded-lg border flex justify-between items-center ${isPast ? 'border-note-nc/30 bg-note-nc/10' : 'border-filet bg-papier'}`}>
                 <div>
                   <p className="font-medium">{site?.nom} · {c.type}</p>
-                  <p className="text-sm text-gray-500">
-                    {formatDate(c.datePrevue)} {isPast && <span className="text-red-600 font-medium">(en retard)</span>}
+                  <p className="text-sm text-acier">
+                    {formatDate(c.datePrevue)} {isPast && <span className="text-note-nc font-medium">(en retard)</span>}
                   </p>
                 </div>
                 <div className="flex gap-2">
                   <Button onClick={() => startControle(c)}>Démarrer</Button>
-                  <button onClick={() => confirm('Annuler ce contrôle planifié ?') && removeRow('controles', c.id)} className="text-red-600 text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-red-50">Annuler</button>
+                  <button onClick={() => confirm('Annuler ce contrôle planifié ?') && removeRow('controles', c.id)} className="text-note-nc text-sm hover:underline px-3 py-2 -mx-3 -my-2 rounded hover:bg-note-nc/5">Annuler</button>
                 </div>
               </div>
             );
           })}
-          {upcoming.length === 0 && <p className="text-gray-500 text-center py-4">Aucun contrôle planifié</p>}
+          {upcoming.length === 0 && <p className="text-acier text-center py-4">Aucun contrôle planifié</p>}
         </div>
       </Card>
     </div>
@@ -3506,8 +3586,8 @@ function PublicReportPage() {
     });
   }, [token]);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Chargement...</div>;
-  if (error) return <div className="min-h-screen flex items-center justify-center p-4"><Card className="text-center max-w-md"><AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" /><p>{error}</p></Card></div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-acier">Chargement...</div>;
+  if (error) return <div className="min-h-screen flex items-center justify-center p-4"><Card className="text-center max-w-md"><AlertCircle className="w-12 h-12 text-note-nc mx-auto mb-4" /><p>{error}</p></Card></div>;
 
   const controle = fromSnake(payload.controle);
   const site = fromSnake(payload.site);
@@ -3519,10 +3599,10 @@ function PublicReportPage() {
   const agent = agents.find((a: any) => a.id === controle.agentEvalueId);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200">
+    <div className="min-h-screen bg-papier">
+      <header className="bg-white border-b border-filet">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-2">
-          <Building2 className="w-6 h-6 text-blue-600" />
+          <Building2 className="w-6 h-6 text-encre" />
           <span className="font-semibold">Rapport de contrôle qualité</span>
         </div>
       </header>
@@ -3530,7 +3610,7 @@ function PublicReportPage() {
         <div className="flex flex-wrap items-center gap-4 justify-between">
           <div>
             <h1 className="text-2xl font-bold">{site?.nom}</h1>
-            <p className="text-gray-500">{formatDate(controle.date)} · {controle.type}</p>
+            <p className="text-acier">{formatDate(controle.date)} · {controle.type}</p>
           </div>
           <Button onClick={() => exportControlePdf({ controle, site, agent, resultats, actions, criteres, locaux })}>
             Télécharger le PDF
@@ -3539,15 +3619,15 @@ function PublicReportPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card className="text-center">
-            <p className="text-sm text-gray-500">Taux de conformité</p>
-            <ConformiteGauge value={controle.tauxConformite || 0} threshold={site?.seuilCible || 90} />
+            <p className="text-sm text-acier">Taux de conformité</p>
+            <ConformiteGauge value={controle.tauxConformite || 0} threshold={site?.seuilCible || SEUIL_DEFAUT} />
           </Card>
           <Card className="text-center">
-            <p className="text-sm text-gray-500">Seuil cible</p>
-            <p className="text-3xl font-bold">{site?.seuilCible || 90}%</p>
+            <p className="text-sm text-acier">Seuil cible</p>
+            <p className="text-3xl font-bold">{site?.seuilCible || SEUIL_DEFAUT}%</p>
           </Card>
           <Card className="text-center">
-            <p className="text-sm text-gray-500">Actions correctives</p>
+            <p className="text-sm text-acier">Actions correctives</p>
             <p className="text-3xl font-bold">{actions.length}</p>
           </Card>
         </div>
@@ -3559,8 +3639,8 @@ function PublicReportPage() {
               const c = criteres.find((x: any) => x.id === r.critereId);
               const l = locaux.find((x: any) => x.id === r.localId);
               return (
-                <div key={r.id} className="p-2 bg-gray-50 rounded border border-gray-200 flex justify-between items-center text-sm">
-                  <div><p className="font-medium">{c?.libelle}</p><p className="text-xs text-gray-500">{l?.nom}</p></div>
+                <div key={r.id} className="p-2 bg-papier rounded border border-filet flex justify-between items-center text-sm">
+                  <div><p className="font-medium">{c?.libelle}</p><p className="text-xs text-acier">{l?.nom}</p></div>
                   <Badge variant={r.note === 'Conforme' ? 'success' : r.note === 'Non conforme' ? 'danger' : r.note === 'Partiellement conforme' ? 'warning' : 'default'}>{r.note}</Badge>
                 </div>
               );
@@ -3573,9 +3653,9 @@ function PublicReportPage() {
             <h2 className="text-lg font-semibold mb-4">Actions correctives ({actions.length})</h2>
             <div className="space-y-2">
               {actions.map((a: any) => (
-                <div key={a.id} className="p-3 bg-gray-50 rounded border border-gray-200">
+                <div key={a.id} className="p-3 bg-papier rounded border border-filet">
                   <div className="flex justify-between items-start gap-2">
-                    <div><p className="font-medium">{a.descriptionNc}</p><p className="text-sm text-gray-600">{a.action}</p><p className="text-xs text-gray-500 mt-1">Échéance : {formatDate(a.echeance)}</p></div>
+                    <div><p className="font-medium">{a.descriptionNc}</p><p className="text-sm text-acier">{a.action}</p><p className="text-xs text-acier mt-1">Échéance : {formatDate(a.echeance)}</p></div>
                     <Badge variant={a.statut === 'Soldée' ? 'success' : a.statut === 'En cours' ? 'warning' : 'danger'}>{a.statut}</Badge>
                   </div>
                 </div>
@@ -3588,13 +3668,13 @@ function PublicReportPage() {
           <Card>
             <h2 className="text-lg font-semibold mb-4">Signatures</h2>
             <div className="grid grid-cols-2 gap-4">
-              {controle.signatureControleur && <div><p className="text-sm text-gray-500 mb-1">Contrôleur</p><img src={controle.signatureControleur} alt="" className="border rounded" /></div>}
-              {controle.signatureAgent && <div><p className="text-sm text-gray-500 mb-1">Agent évalué</p><img src={controle.signatureAgent} alt="" className="border rounded" /></div>}
+              {controle.signatureControleur && <div><p className="text-sm text-acier mb-1">Contrôleur</p><img src={controle.signatureControleur} alt="" className="border rounded" /></div>}
+              {controle.signatureAgent && <div><p className="text-sm text-acier mb-1">Agent évalué</p><img src={controle.signatureAgent} alt="" className="border rounded" /></div>}
             </div>
           </Card>
         )}
       </main>
-      <footer className="text-center text-xs text-gray-500 py-4">Généré par Contrôle Qualité Propreté</footer>
+      <footer className="text-center text-xs text-acier py-4">Généré par Contrôle Qualité Propreté</footer>
     </div>
   );
 }
@@ -3629,18 +3709,18 @@ function ParamMenu({ links }: { links: { to: string; label: string }[] }) {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(v => !v)}
-        className={`px-3 py-2 text-sm rounded flex items-center gap-1 ${open ? 'bg-gray-100' : 'hover:bg-gray-100'}`}
+        className={`px-3 py-2 text-sm rounded flex items-center gap-1 ${open ? 'bg-papier' : 'hover:bg-papier'}`}
       >
         Paramétrage <span className={`text-xs transition-transform ${open ? 'rotate-180' : ''}`}>▾</span>
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[220px] z-50">
+        <div className="absolute right-0 top-full mt-1 bg-white border border-filet rounded-lg shadow-lg py-1 min-w-[220px] z-50">
           {links.map(l => (
             <Link
               key={l.to}
               to={l.to}
               onClick={() => setOpen(false)}
-              className="block px-4 py-2 text-sm hover:bg-gray-100 whitespace-nowrap"
+              className="block px-4 py-2 text-sm hover:bg-papier whitespace-nowrap"
             >{l.label}</Link>
           ))}
         </div>
@@ -3696,9 +3776,9 @@ function Layout({ children }: any) {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-papier">
       {!online && (
-        <div className="bg-orange-500 text-white text-center text-sm py-1.5 sticky top-0 z-50">
+        <div className="bg-note-alerte text-white text-center text-sm py-1.5 sticky top-0 z-50">
           ⚠ Hors-ligne — vos modifications seront sauvegardées localement et perdues si vous fermez l'onglet
         </div>
       )}
@@ -3707,22 +3787,22 @@ function Layout({ children }: any) {
           🚀 Mode démo — vos modifications ne seront pas enregistrées. <button onClick={() => signOut()} className="underline font-medium ml-2">Créer un vrai compte →</button>
         </div>
       )}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+      <header className="bg-white border-b border-filet sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <Building2 className="w-6 h-6 text-blue-600" />
-            <span className="font-semibold text-gray-900">Contrôle Qualité</span>
+            <Building2 className="w-6 h-6 text-encre" />
+            <span className="font-semibold text-encre">Contrôle Qualité</span>
           </div>
           <nav className="hidden md:flex gap-2 items-center">
             {mainLinks.map(l => (
-              <Link key={l.to} to={l.to} className="px-3 py-2 text-sm hover:bg-gray-100 rounded">{l.label}</Link>
+              <Link key={l.to} to={l.to} className="px-3 py-2 text-sm hover:bg-papier rounded">{l.label}</Link>
             ))}
             {configLinks.length > 0 && <ParamMenu links={configLinks} />}
           </nav>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-700 hidden lg:inline">{session.user?.email}</span>
+            <span className="text-sm text-encre hidden lg:inline">{session.user?.email}</span>
             <button
-              className="md:hidden p-2 hover:bg-gray-100 rounded"
+              className="md:hidden p-2 hover:bg-papier rounded"
               onClick={() => setMenuOpen(v => !v)}
               aria-label="Menu"
             >
@@ -3738,16 +3818,16 @@ function Layout({ children }: any) {
           </div>
         </div>
         {menuOpen && (
-          <div className="md:hidden border-t border-gray-200 bg-white">
+          <div className="md:hidden border-t border-filet bg-white">
             <nav className="flex flex-col p-2">
               {mainLinks.map(l => (
-                <Link key={l.to} to={l.to} onClick={() => setMenuOpen(false)} className="px-3 py-2 hover:bg-gray-100 rounded">{l.label}</Link>
+                <Link key={l.to} to={l.to} onClick={() => setMenuOpen(false)} className="px-3 py-2 hover:bg-papier rounded">{l.label}</Link>
               ))}
               {configLinks.length > 0 && (
                 <>
-                  <div className="px-3 py-2 mt-2 text-xs font-semibold text-gray-500 uppercase border-t border-gray-100">Paramétrage</div>
+                  <div className="px-3 py-2 mt-2 text-xs font-semibold text-acier uppercase border-t border-filet-clair">Paramétrage</div>
                   {configLinks.map(l => (
-                    <Link key={l.to} to={l.to} onClick={() => setMenuOpen(false)} className="px-3 py-2 hover:bg-gray-100 rounded text-sm">{l.label}</Link>
+                    <Link key={l.to} to={l.to} onClick={() => setMenuOpen(false)} className="px-3 py-2 hover:bg-papier rounded text-sm">{l.label}</Link>
                   ))}
                 </>
               )}
@@ -3760,7 +3840,7 @@ function Layout({ children }: any) {
 
       {isDemoMode() && <WelcomeModal userId={uid} role={role} />}
 
-      <footer className="bg-white border-t border-gray-200 py-2 text-center text-xs text-gray-500">
+      <footer className="bg-white border-t border-filet py-2 text-center text-xs text-acier">
         © 2026 Contrôle Qualité Propreté
       </footer>
     </div>
@@ -3770,7 +3850,7 @@ function Layout({ children }: any) {
 // ========== APP ==========
 function RequireAuth({ children }: any) {
   const { session, loading } = useApp();
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Chargement...</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-acier">Chargement...</div>;
   if (!session) return <LandingPage />;
   return children;
 }

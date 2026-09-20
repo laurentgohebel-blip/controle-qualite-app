@@ -39,20 +39,20 @@ export class ErrorBoundary extends React.Component<Props, State> {
         <div className="text-center max-w-md">
           <div className="text-6xl mb-4">😵</div>
           <h2 className="text-xl font-bold mb-2">Cette section a rencontré un souci</h2>
-          <p className="text-sm text-gray-600 mb-6">
+          <p className="text-sm text-acier mb-6">
             Pas d'inquiétude : vos données sont sauvegardées. Rechargez cette section ou revenez au tableau de bord.
           </p>
           {this.state.error && (
-            <details className="text-left text-xs text-gray-500 mb-4 bg-gray-50 p-3 rounded border">
-              <summary className="cursor-pointer hover:text-gray-700">Détails techniques</summary>
+            <details className="text-left text-xs text-acier mb-4 bg-papier p-3 rounded border">
+              <summary className="cursor-pointer hover:text-encre">Détails techniques</summary>
               <pre className="mt-2 overflow-x-auto whitespace-pre-wrap">{this.state.error.message}</pre>
             </details>
           )}
           <div className="flex gap-2 justify-center flex-wrap">
-            <button onClick={this.reset} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+            <button onClick={this.reset} className="px-4 py-2 bg-encre text-white rounded-lg hover:bg-encre-fonce">
               Réessayer
             </button>
-            <button onClick={() => window.location.href = '/'} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+            <button onClick={() => window.location.href = '/'} className="px-4 py-2 bg-papier text-encre rounded-lg hover:bg-filet-clair">
               Tableau de bord
             </button>
           </div>
@@ -80,20 +80,20 @@ export class GlobalErrorBoundary extends React.Component<{ children: React.React
   render() {
     if (!this.state.hasError) return this.props.children;
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-papier flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-lg p-8 max-w-md text-center">
           <div className="text-6xl mb-4">💥</div>
           <h1 className="text-2xl font-bold mb-2">Quelque chose a planté</h1>
-          <p className="text-sm text-gray-600 mb-6">
+          <p className="text-sm text-acier mb-6">
             L'application a rencontré une erreur inattendue. Vos données sont en sécurité côté serveur.
           </p>
           {this.state.error && (
-            <details className="text-left text-xs text-gray-500 mb-4 bg-gray-50 p-3 rounded border">
+            <details className="text-left text-xs text-acier mb-4 bg-papier p-3 rounded border">
               <summary className="cursor-pointer">Détails techniques</summary>
               <pre className="mt-2 overflow-x-auto whitespace-pre-wrap">{this.state.error.message}</pre>
             </details>
           )}
-          <button onClick={() => window.location.reload()} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+          <button onClick={() => window.location.reload()} className="px-6 py-3 bg-encre text-white rounded-lg hover:bg-encre-fonce">
             Recharger l'application
           </button>
         </div>

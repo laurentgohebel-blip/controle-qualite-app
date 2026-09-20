@@ -1,5 +1,64 @@
 @import "tailwindcss";
 
+/* ============================================================
+   Jetons de la direction visuelle
+   Registre outil terrain : chassis bleu, couleur reservee a la note.
+   Une seule source de verite — ne pas ecrire de hex dans les composants.
+   ============================================================ */
+
+@theme {
+  /* --- Typographie : une famille, deux chasses --- */
+  --font-sans: "Barlow", system-ui, -apple-system, sans-serif;
+  --font-cond: "Barlow Condensed", "Barlow", system-ui, sans-serif;
+
+  /* --- Chassis et identite --- */
+  --color-encre: #0E3A6B;        /* bleu de plan : en-tetes, pieds, boutons sombres */
+  --color-encre-fonce: #0A2C52;  /* etat survol des surfaces encre */
+  --color-encre-filet: #1F4E85;  /* separateur pose sur fond encre */
+  --color-brume: #9FB4D0;        /* texte secondaire sur fond encre */
+  --color-ciel: #5FC2E8;         /* accent : action primaire, avancement, onglet actif */
+
+  /* --- Neutres, teintes vers le bleu --- */
+  --color-acier: #5A6B82;        /* texte secondaire sur fond clair */
+  --color-acier-clair: #8B9BB2;  /* metadonnees, coefficients */
+  --color-filet: #CDD5E0;        /* filet structurant */
+  --color-filet-clair: #E1E6EE;  /* separateur de ligne de liste */
+  --color-papier: #E7EAEF;       /* fond d'application */
+
+  /* --- Echelle de conformite : ces quatre couleurs ne servent qu'a une note --- */
+  --color-note-conforme: #0F7A52;
+  --color-note-partiel: #B06A00;
+  --color-note-alerte: #D4560E;   /* echelons intermediaires des secteurs a 5 niveaux */
+  --color-note-nc: #BC2E1C;
+  --color-note-sansobjet: #64748E;
+
+  /* --- Le rayon encode la fonction --- */
+  --radius-commande: 6px;        /* boutons, champs, pastilles de note */
+}
+
+/* Surfaces structurantes : rayon nul, assume.
+   Pastilles d'etat : rounded-full. Entre les deux : rounded-commande. */
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--color-papier);
+    color: var(--color-encre);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Chiffres alignes en colonne : taux, coefficients, dates */
+  .tabulaire {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ciel);
+    outline-offset: 2px;
+  }
+}
+
+
 /* Animations pour l'Explainer */
 @keyframes fade-in-up {
   0% { opacity: 0; transform: translateY(10px); }
@@ -51,7 +110,7 @@
 }
 
 @keyframes pulse-soft {
-  0%, 100% { transform: scale(1); box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.3); }
-  50% { transform: scale(1.05); box-shadow: 0 15px 35px -5px rgba(37, 99, 235, 0.5); }
+  0%, 100% { transform: scale(1); box-shadow: 0 10px 25px -5px rgba(14, 58, 107, 0.3); }
+  50% { transform: scale(1.05); box-shadow: 0 15px 35px -5px rgba(14, 58, 107, 0.5); }
 }
 .animate-pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }

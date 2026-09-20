@@ -59,8 +59,8 @@ export function VoiceButton({ onResult, lang = 'fr-FR' }: { onResult: (text: str
       onClick={toggle}
       className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full border transition ${
         listening
-          ? 'bg-red-100 text-red-700 border-red-300 animate-pulse'
-          : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+          ? 'bg-note-nc/10 text-note-nc border-note-nc/30 animate-pulse'
+          : 'bg-white text-encre border-filet hover:border-ciel hover:bg-encre/5'
       }`}
       title="Dicter le commentaire"
     >
